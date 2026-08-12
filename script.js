@@ -3,8 +3,11 @@ const DIAS_AGUARDANDO_RETORNO = 5;
 const LIMITE_AVISOS = 3;
 
 let empresaId = null;
-let data = { clientes: [], veiculos: [], pecas: [] };
+let data = { clientes: [], veiculos: [], pecas: [], agendamentos: [] };
 let modoCadastro = false;
+let filtroClientes = '';
+let filtroVeiculos = '';
+let filtroAgendamentos = '';
 
 // ---------------- AUTH ----------------
 document.getElementById('authToggleLink').addEventListener('click', ()=>{
@@ -88,14 +91,16 @@ async function carregarDados(){
   document.getElementById('loadingState').classList.remove('hidden');
   document.getElementById('appContent').classList.add('hidden');
 
-  const [{ data: clientes }, { data: veiculos }, { data: pecas }] = await Promise.all([
+  const [{ data: clientes }, { data: veiculos }, { data: pecas }, { data: agendamentos }] = await Promise.all([
     sb.from('clientes').select('*').eq('empresa_id', empresaId).order('nome'),
     sb.from('veiculos').select('*').eq('empresa_id', empresaId),
     sb.from('pecas').select('*').eq('empresa_id', empresaId).order('nome'),
+    sb.from('agendamentos').select('*').eq('empresa_id', empresaId).order('data_agendamento'),
   ]);
   data.clientes = clientes || [];
   data.veiculos = veiculos || [];
   data.pecas = pecas || [];
+  data.agendamentos = agendamentos || [];
 
   document.getElementById('loadingState').classList.add('hidden');
   document.getElementById('appContent').classList.remove('hidden');
@@ -113,6 +118,10 @@ document.querySelectorAll('.nav-item').forEach(btn=>{
 
 function closeModal(id){ document.getElementById(id).classList.remove('show'); }
 function openModal(id){ document.getElementById(id).classList.add('show'); }
+
+document.getElementById('buscaClientes').addEventListener('input', (e)=>{ filtroClientes = e.target.value.trim().toLowerCase(); renderClientes(); });
+document.getElementById('buscaVeiculos').addEventListener('input', (e)=>{ filtroVeiculos = e.target.value.trim().toLowerCase(); renderVeiculos(); });
+document.getElementById('buscaAgendamentos').addEventListener('input', (e)=>{ filtroAgendamentos = e.target.value.trim().toLowerCase(); renderAgendamentos(); });
 
 // ---------------- CLIENTES ----------------
 document.getElementById('btnNovoCliente').addEventListener('click', ()=>{
@@ -228,6 +237,155 @@ async function reabrirFila(veiculoId){
   await carregarDados();
 }
 
+// ---------------- AGENDAMENTOS ----------------
+document.getElementById('btnNovoAgendamento').addEventListener('click', ()=>{
+  abrirModalAgendamento();
+});
+
+function abrirModalAgendamento(clienteId, veiculoId){
+  document.getElementById('modalAgendamentoTitle').textContent = 'Novo agendamento';
+  document.getElementById('agendamentoId').value = '';
+  document.getElementById('agendamentoData').value = '';
+  document.getElementById('agendamentoHorario').value = '';
+  document.getElementById('agendamentoObservacao').value = '';
+  document.getElementById('agendamentoSugestoes').classList.add('hidden');
+  if(clienteId){
+    selecionarClienteAgendamento(clienteId);
+    if(veiculoId) document.getElementById('agendamentoVeiculo').value = veiculoId;
+  } else {
+    document.getElementById('agendamentoBuscaCliente').value = '';
+    document.getElementById('agendamentoClienteId').value = '';
+    document.getElementById('agendamentoVeiculo').innerHTML = '<option value="">Busque um cliente primeiro</option>';
+  }
+  openModal('overlayAgendamento');
+}
+
+document.getElementById('agendamentoBuscaCliente').addEventListener('input', (e)=>{
+  const termo = e.target.value.trim().toLowerCase();
+  document.getElementById('agendamentoClienteId').value = '';
+  document.getElementById('agendamentoVeiculo').innerHTML = '<option value="">Busque um cliente primeiro</option>';
+  const sugestoesEl = document.getElementById('agendamentoSugestoes');
+  if(!termo){ sugestoesEl.classList.add('hidden'); sugestoesEl.innerHTML = ''; return; }
+  const resultados = data.clientes.filter(c=>{
+    const veiculosCliente = data.veiculos.filter(v=>v.cliente_id===c.id);
+    const placas = veiculosCliente.map(v=>(v.placa||'').toLowerCase()).join(' ');
+    return c.nome.toLowerCase().includes(termo) || (c.telefone||'').toLowerCase().includes(termo) || placas.includes(termo);
+  }).slice(0,8);
+  if(resultados.length===0){
+    sugestoesEl.innerHTML = `<div class="autocomplete-empty">Nenhum cliente encontrado</div>`;
+    sugestoesEl.classList.remove('hidden');
+    return;
+  }
+  sugestoesEl.innerHTML = resultados.map(c=>{
+    const nVeiculos = data.veiculos.filter(v=>v.cliente_id===c.id).length;
+    return `<div class="autocomplete-item" onclick="selecionarClienteAgendamento('${c.id}')">
+      <div class="ac-nome">${escapeHtml(c.nome)}</div>
+      <div class="ac-sub">${escapeHtml(c.telefone||'sem telefone')} · ${nVeiculos} veículo${nVeiculos===1?'':'s'}</div>
+    </div>`;
+  }).join('');
+  sugestoesEl.classList.remove('hidden');
+});
+
+function selecionarClienteAgendamento(clienteId){
+  const c = data.clientes.find(x=>x.id===clienteId);
+  if(!c) return;
+  document.getElementById('agendamentoClienteId').value = c.id;
+  document.getElementById('agendamentoBuscaCliente').value = c.nome;
+  document.getElementById('agendamentoSugestoes').classList.add('hidden');
+  const veiculosCliente = data.veiculos.filter(v=>v.cliente_id===c.id);
+  const sel = document.getElementById('agendamentoVeiculo');
+  sel.innerHTML = veiculosCliente.length===0
+    ? '<option value="">Cliente sem veículo cadastrado</option>'
+    : veiculosCliente.map(v=>`<option value="${v.id}">${escapeHtml(v.placa)} — ${escapeHtml(v.modelo)}</option>`).join('');
+}
+
+document.addEventListener('click', (e)=>{
+  const campo = document.getElementById('agendamentoBuscaCliente');
+  const sugestoes = document.getElementById('agendamentoSugestoes');
+  if(campo && sugestoes && !campo.contains(e.target) && !sugestoes.contains(e.target)){
+    sugestoes.classList.add('hidden');
+  }
+});
+
+function editAgendamento(id){
+  const a = data.agendamentos.find(x=>x.id===id);
+  if(!a) return;
+  document.getElementById('modalAgendamentoTitle').textContent = 'Editar agendamento';
+  document.getElementById('agendamentoId').value = a.id;
+  document.getElementById('agendamentoData').value = a.data_agendamento || '';
+  document.getElementById('agendamentoHorario').value = a.horario || '';
+  document.getElementById('agendamentoObservacao').value = a.observacao || '';
+  selecionarClienteAgendamento(a.cliente_id);
+  if(a.veiculo_id) document.getElementById('agendamentoVeiculo').value = a.veiculo_id;
+  openModal('overlayAgendamento');
+}
+
+document.getElementById('salvarAgendamentoBtn').addEventListener('click', async ()=>{
+  const id = document.getElementById('agendamentoId').value;
+  const cliente_id = document.getElementById('agendamentoClienteId').value;
+  const veiculo_id = document.getElementById('agendamentoVeiculo').value || null;
+  const data_agendamento = document.getElementById('agendamentoData').value;
+  const horario = document.getElementById('agendamentoHorario').value || null;
+  const observacao = document.getElementById('agendamentoObservacao').value.trim();
+  if(!cliente_id){ alert('Busque e selecione um cliente.'); return; }
+  if(!data_agendamento){ alert('Informe a data do agendamento.'); return; }
+  if(id){
+    await sb.from('agendamentos').update({ cliente_id, veiculo_id, data_agendamento, horario, observacao }).eq('id', id);
+  } else {
+    await sb.from('agendamentos').insert({ empresa_id: empresaId, cliente_id, veiculo_id, data_agendamento, horario, observacao, status: 'agendado' });
+  }
+  closeModal('overlayAgendamento');
+  await carregarDados();
+});
+
+async function marcarAgendamentoConcluido(id){
+  await sb.from('agendamentos').update({ status: 'concluido' }).eq('id', id);
+  await carregarDados();
+}
+
+async function excluirAgendamento(id){
+  if(!confirm('Excluir este agendamento?')) return;
+  await sb.from('agendamentos').delete().eq('id', id);
+  await carregarDados();
+}
+
+function renderAgendamentos(){
+  const body = document.getElementById('agendamentosBody');
+  const termo = filtroAgendamentos;
+  let lista = [...data.agendamentos].sort((a,b)=>(a.data_agendamento||'').localeCompare(b.data_agendamento||''));
+  if(termo){
+    lista = lista.filter(a=>{
+      const cliente = data.clientes.find(c=>c.id===a.cliente_id);
+      const veiculo = data.veiculos.find(v=>v.id===a.veiculo_id);
+      return (cliente ? cliente.nome.toLowerCase().includes(termo) : false)
+        || (veiculo ? (veiculo.placa||'').toLowerCase().includes(termo) || (veiculo.modelo||'').toLowerCase().includes(termo) : false)
+        || (a.observacao||'').toLowerCase().includes(termo);
+    });
+  }
+  if(lista.length===0){ body.innerHTML = `<tr><td colspan="6" class="empty-note">${termo ? 'Nenhum agendamento encontrado.' : 'Nenhum agendamento cadastrado ainda.'}</td></tr>`; return; }
+  body.innerHTML = lista.map(a=>{
+    const cliente = data.clientes.find(c=>c.id===a.cliente_id);
+    const veiculo = data.veiculos.find(v=>v.id===a.veiculo_id);
+    let dataLabel = '—';
+    if(a.data_agendamento){
+      dataLabel = new Date(a.data_agendamento+'T00:00:00').toLocaleDateString('pt-BR');
+      if(a.horario) dataLabel += ` às ${a.horario.slice(0,5)}`;
+    }
+    const concluido = a.status === 'concluido';
+    return `<tr>
+      <td>${cliente ? escapeHtml(cliente.nome) : '—'}</td>
+      <td>${veiculo ? escapeHtml(veiculo.placa)+' — '+escapeHtml(veiculo.modelo) : '<span class="tag-pill">sem veículo</span>'}</td>
+      <td>${dataLabel}</td>
+      <td>${escapeHtml(a.observacao || '—')}</td>
+      <td><span class="tag-pill">${concluido ? 'Concluído' : 'Agendado'}</span></td>
+      <td><div class="row-actions">
+        ${concluido ? '' : `<button class="btn btn-ghost btn-sm" onclick="marcarAgendamentoConcluido('${a.id}')">Concluir</button>`}
+        <button class="btn btn-ghost btn-sm" onclick="editAgendamento('${a.id}')">Editar</button>
+        <button class="btn btn-ghost btn-sm" onclick="excluirAgendamento('${a.id}')">Excluir</button>
+      </div></td></tr>`;
+  }).join('');
+}
+
 // ---------------- PECAS ----------------
 document.getElementById('btnNovaPeca').addEventListener('click', ()=>{
   document.getElementById('modalPecaTitle').textContent = 'Nova peça';
@@ -279,7 +437,7 @@ function diasAte(dataStr){ if(!dataStr) return null; const hoje = new Date(); ho
 function waLink(telefone, mensagem){ const digits = (telefone||'').replace(/\D/g,''); const withCountry = digits.startsWith('55') ? digits : '55'+digits; return `https://wa.me/${withCountry}?text=${encodeURIComponent(mensagem)}`; }
 
 // ---------------- RENDER ----------------
-function renderAll(){ renderPainel(); renderClientes(); renderVeiculos(); renderPecas(); }
+function renderAll(){ renderPainel(); renderAgendamentos(); renderClientes(); renderVeiculos(); renderPecas(); }
 
 function tagCardHtml(v, cliente, dias, opts){
   const overdue = dias < 0;
@@ -376,19 +534,29 @@ async function renderPainel(){
 
 function renderClientes(){
   const body = document.getElementById('clientesBody');
-  if(data.clientes.length===0){ body.innerHTML = `<tr><td colspan="4" class="empty-note">Nenhum cliente cadastrado ainda.</td></tr>`; return; }
-  body.innerHTML = data.clientes.map(c=>{
+  const termo = filtroClientes;
+  const lista = termo ? data.clientes.filter(c=>c.nome.toLowerCase().includes(termo) || (c.telefone||'').toLowerCase().includes(termo)) : data.clientes;
+  if(lista.length===0){ body.innerHTML = `<tr><td colspan="4" class="empty-note">${termo ? 'Nenhum cliente encontrado.' : 'Nenhum cliente cadastrado ainda.'}</td></tr>`; return; }
+  body.innerHTML = lista.map(c=>{
     const nVeiculos = data.veiculos.filter(v=>v.cliente_id===c.id).length;
     return `<tr><td>${escapeHtml(c.nome)}</td><td class="mono">${escapeHtml(c.telefone||'—')}</td>
       <td><span class="tag-pill">${nVeiculos} veículo${nVeiculos===1?'':'s'}</span></td>
-      <td><div class="row-actions"><button class="btn btn-ghost btn-sm" onclick="editCliente('${c.id}')">Editar</button><button class="btn btn-ghost btn-sm" onclick="excluirCliente('${c.id}')">Excluir</button></div></td></tr>`;
+      <td><div class="row-actions"><button class="btn btn-ghost btn-sm" onclick="abrirModalAgendamento('${c.id}')">Agendar</button><button class="btn btn-ghost btn-sm" onclick="editCliente('${c.id}')">Editar</button><button class="btn btn-ghost btn-sm" onclick="excluirCliente('${c.id}')">Excluir</button></div></td></tr>`;
   }).join('');
 }
 
 function renderVeiculos(){
   const body = document.getElementById('veiculosBody');
-  if(data.veiculos.length===0){ body.innerHTML = `<tr><td colspan="5" class="empty-note">Nenhum veículo cadastrado ainda.</td></tr>`; return; }
-  body.innerHTML = data.veiculos.map(v=>{
+  const termo = filtroVeiculos;
+  let lista = data.veiculos;
+  if(termo){
+    lista = lista.filter(v=>{
+      const cliente = data.clientes.find(c=>c.id===v.cliente_id);
+      return (v.placa||'').toLowerCase().includes(termo) || (v.modelo||'').toLowerCase().includes(termo) || (cliente ? cliente.nome.toLowerCase().includes(termo) : false);
+    });
+  }
+  if(lista.length===0){ body.innerHTML = `<tr><td colspan="5" class="empty-note">${termo ? 'Nenhum veículo encontrado.' : 'Nenhum veículo cadastrado ainda.'}</td></tr>`; return; }
+  body.innerHTML = lista.map(v=>{
     const cliente = data.clientes.find(c=>c.id===v.cliente_id);
     const dias = diasAte(v.proxima_revisao);
     let revisaoLabel = '—';
@@ -397,9 +565,10 @@ function renderVeiculos(){
       revisaoLabel = d.toLocaleDateString('pt-BR');
       if(dias<0) revisaoLabel += ` (vencida)`;
     }
+    const btnAgendar = cliente ? `<button class="btn btn-ghost btn-sm" onclick="abrirModalAgendamento('${v.cliente_id}','${v.id}')">Agendar</button>` : '';
     return `<tr><td class="mono">${escapeHtml(v.placa)}</td><td>${escapeHtml(v.modelo)}</td>
       <td>${cliente ? escapeHtml(cliente.nome) : '<span class="tag-pill">sem cliente</span>'}</td><td>${revisaoLabel}</td>
-      <td><div class="row-actions"><button class="btn btn-ghost btn-sm" onclick="editVeiculo('${v.id}')">Editar</button><button class="btn btn-ghost btn-sm" onclick="excluirVeiculo('${v.id}')">Excluir</button></div></td></tr>`;
+      <td><div class="row-actions">${btnAgendar}<button class="btn btn-ghost btn-sm" onclick="editVeiculo('${v.id}')">Editar</button><button class="btn btn-ghost btn-sm" onclick="excluirVeiculo('${v.id}')">Excluir</button></div></td></tr>`;
   }).join('');
 }
 
