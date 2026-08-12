@@ -3,11 +3,13 @@ const DIAS_AGUARDANDO_RETORNO = 5;
 const LIMITE_AVISOS = 3;
 
 let empresaId = null;
-let data = { clientes: [], veiculos: [], pecas: [], agendamentos: [] };
+let data = { clientes: [], veiculos: [], pecas: [], agendamentos: [], fornecedores: [] };
 let modoCadastro = false;
 let filtroClientes = '';
 let filtroVeiculos = '';
 let filtroAgendamentos = '';
+let filtroPecas = '';
+let filtroFornecedores = '';
 
 // ---------------- AUTH ----------------
 document.getElementById('authToggleLink').addEventListener('click', ()=>{
@@ -91,16 +93,18 @@ async function carregarDados(){
   document.getElementById('loadingState').classList.remove('hidden');
   document.getElementById('appContent').classList.add('hidden');
 
-  const [{ data: clientes }, { data: veiculos }, { data: pecas }, { data: agendamentos }] = await Promise.all([
+  const [{ data: clientes }, { data: veiculos }, { data: pecas }, { data: agendamentos }, { data: fornecedores }] = await Promise.all([
     sb.from('clientes').select('*').eq('empresa_id', empresaId).order('nome'),
     sb.from('veiculos').select('*').eq('empresa_id', empresaId),
     sb.from('pecas').select('*').eq('empresa_id', empresaId).order('nome'),
     sb.from('agendamentos').select('*').eq('empresa_id', empresaId).order('data_agendamento'),
+    sb.from('fornecedores').select('*').eq('empresa_id', empresaId).order('nome'),
   ]);
   data.clientes = clientes || [];
   data.veiculos = veiculos || [];
   data.pecas = pecas || [];
   data.agendamentos = agendamentos || [];
+  data.fornecedores = fornecedores || [];
 
   document.getElementById('loadingState').classList.add('hidden');
   document.getElementById('appContent').classList.remove('hidden');
@@ -122,6 +126,8 @@ function openModal(id){ document.getElementById(id).classList.add('show'); }
 document.getElementById('buscaClientes').addEventListener('input', (e)=>{ filtroClientes = e.target.value.trim().toLowerCase(); renderClientes(); });
 document.getElementById('buscaVeiculos').addEventListener('input', (e)=>{ filtroVeiculos = e.target.value.trim().toLowerCase(); renderVeiculos(); });
 document.getElementById('buscaAgendamentos').addEventListener('input', (e)=>{ filtroAgendamentos = e.target.value.trim().toLowerCase(); renderAgendamentos(); });
+document.getElementById('buscaPecas').addEventListener('input', (e)=>{ filtroPecas = e.target.value.trim().toLowerCase(); renderPecas(); });
+document.getElementById('buscaFornecedores').addEventListener('input', (e)=>{ filtroFornecedores = e.target.value.trim().toLowerCase(); renderFornecedores(); });
 
 // ---------------- CLIENTES ----------------
 document.getElementById('btnNovoCliente').addEventListener('click', ()=>{
@@ -394,8 +400,15 @@ document.getElementById('btnNovaPeca').addEventListener('click', ()=>{
   document.getElementById('pecaQtd').value = '';
   document.getElementById('pecaMin').value = '';
   document.getElementById('pecaPreco').value = '';
+  populateFornecedorSelect();
   openModal('overlayPeca');
 });
+
+function populateFornecedorSelect(selectedId){
+  const sel = document.getElementById('pecaFornecedor');
+  sel.innerHTML = '<option value="">Nenhum</option>' + data.fornecedores.map(f=>`<option value="${f.id}">${escapeHtml(f.nome)}</option>`).join('');
+  sel.value = selectedId || '';
+}
 
 function editPeca(id){
   const p = data.pecas.find(x=>x.id===id);
@@ -406,6 +419,7 @@ function editPeca(id){
   document.getElementById('pecaQtd').value = p.qtd;
   document.getElementById('pecaMin').value = p.estoque_minimo;
   document.getElementById('pecaPreco').value = p.preco;
+  populateFornecedorSelect(p.fornecedor_id);
   openModal('overlayPeca');
 }
 
@@ -415,11 +429,12 @@ document.getElementById('salvarPecaBtn').addEventListener('click', async ()=>{
   const qtd = parseInt(document.getElementById('pecaQtd').value) || 0;
   const estoque_minimo = parseInt(document.getElementById('pecaMin').value) || 0;
   const preco = parseFloat(document.getElementById('pecaPreco').value) || 0;
+  const fornecedor_id = document.getElementById('pecaFornecedor').value || null;
   if(!nome){ alert('Informe o nome da peça.'); return; }
   if(id){
-    await sb.from('pecas').update({ nome, qtd, estoque_minimo, preco }).eq('id', id);
+    await sb.from('pecas').update({ nome, qtd, estoque_minimo, preco, fornecedor_id }).eq('id', id);
   } else {
-    await sb.from('pecas').insert({ empresa_id: empresaId, nome, qtd, estoque_minimo, preco });
+    await sb.from('pecas').insert({ empresa_id: empresaId, nome, qtd, estoque_minimo, preco, fornecedor_id });
   }
   closeModal('overlayPeca');
   await carregarDados();
@@ -431,13 +446,65 @@ async function excluirPeca(id){
   await carregarDados();
 }
 
+// ---------------- FORNECEDORES ----------------
+document.getElementById('btnNovoFornecedor').addEventListener('click', ()=>{
+  document.getElementById('modalFornecedorTitle').textContent = 'Novo fornecedor';
+  document.getElementById('fornecedorId').value = '';
+  document.getElementById('fornecedorNome').value = '';
+  document.getElementById('fornecedorTelefone').value = '';
+  openModal('overlayFornecedor');
+});
+
+function editFornecedor(id){
+  const f = data.fornecedores.find(x=>x.id===id);
+  if(!f) return;
+  document.getElementById('modalFornecedorTitle').textContent = 'Editar fornecedor';
+  document.getElementById('fornecedorId').value = f.id;
+  document.getElementById('fornecedorNome').value = f.nome;
+  document.getElementById('fornecedorTelefone').value = f.telefone || '';
+  openModal('overlayFornecedor');
+}
+
+document.getElementById('salvarFornecedorBtn').addEventListener('click', async ()=>{
+  const id = document.getElementById('fornecedorId').value;
+  const nome = document.getElementById('fornecedorNome').value.trim();
+  const telefone = document.getElementById('fornecedorTelefone').value.trim();
+  if(!nome){ alert('Informe o nome do fornecedor.'); return; }
+  if(id){
+    await sb.from('fornecedores').update({ nome, telefone }).eq('id', id);
+  } else {
+    await sb.from('fornecedores').insert({ empresa_id: empresaId, nome, telefone });
+  }
+  closeModal('overlayFornecedor');
+  await carregarDados();
+});
+
+async function excluirFornecedor(id){
+  if(!confirm('Excluir este fornecedor? As peças ligadas a ele ficarão sem fornecedor.')) return;
+  await sb.from('fornecedores').delete().eq('id', id);
+  await carregarDados();
+}
+
+function renderFornecedores(){
+  const body = document.getElementById('fornecedoresBody');
+  const termo = filtroFornecedores;
+  const lista = termo ? data.fornecedores.filter(f=>f.nome.toLowerCase().includes(termo) || (f.telefone||'').toLowerCase().includes(termo)) : data.fornecedores;
+  if(lista.length===0){ body.innerHTML = `<tr><td colspan="4" class="empty-note">${termo ? 'Nenhum fornecedor encontrado.' : 'Nenhum fornecedor cadastrado ainda.'}</td></tr>`; return; }
+  body.innerHTML = lista.map(f=>{
+    const nPecas = data.pecas.filter(p=>p.fornecedor_id===f.id).length;
+    return `<tr><td>${escapeHtml(f.nome)}</td><td class="mono">${escapeHtml(f.telefone||'—')}</td>
+      <td><span class="tag-pill">${nPecas} peça${nPecas===1?'':'s'}</span></td>
+      <td><div class="row-actions"><button class="btn btn-ghost btn-sm" onclick="editFornecedor('${f.id}')">Editar</button><button class="btn btn-ghost btn-sm" onclick="excluirFornecedor('${f.id}')">Excluir</button></div></td></tr>`;
+  }).join('');
+}
+
 // ---------------- HELPERS ----------------
 function escapeHtml(s){ return (s||'').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
 function diasAte(dataStr){ if(!dataStr) return null; const hoje = new Date(); hoje.setHours(0,0,0,0); const alvo = new Date(dataStr+'T00:00:00'); return Math.round((alvo - hoje) / 86400000); }
 function waLink(telefone, mensagem){ const digits = (telefone||'').replace(/\D/g,''); const withCountry = digits.startsWith('55') ? digits : '55'+digits; return `https://wa.me/${withCountry}?text=${encodeURIComponent(mensagem)}`; }
 
 // ---------------- RENDER ----------------
-function renderAll(){ renderPainel(); renderAgendamentos(); renderClientes(); renderVeiculos(); renderPecas(); }
+function renderAll(){ renderPainel(); renderAgendamentos(); renderClientes(); renderVeiculos(); renderPecas(); renderFornecedores(); }
 
 function tagCardHtml(v, cliente, dias, opts){
   const overdue = dias < 0;
@@ -574,10 +641,23 @@ function renderVeiculos(){
 
 function renderPecas(){
   const body = document.getElementById('pecasBody');
-  if(data.pecas.length===0){ body.innerHTML = `<tr><td colspan="4" class="empty-note">Nenhuma peça cadastrada ainda.</td></tr>`; return; }
-  body.innerHTML = data.pecas.map(p=>{
+  const termo = filtroPecas;
+  const lista = termo ? data.pecas.filter(p=>p.nome.toLowerCase().includes(termo)) : data.pecas;
+  if(lista.length===0){ body.innerHTML = `<tr><td colspan="5" class="empty-note">${termo ? 'Nenhuma peça encontrada.' : 'Nenhuma peça cadastrada ainda.'}</td></tr>`; return; }
+  body.innerHTML = lista.map(p=>{
     const baixo = p.qtd <= p.estoque_minimo;
+    const fornecedor = data.fornecedores.find(f=>f.id===p.fornecedor_id);
+    let fornecedorCell = '<span class="tag-pill">sem fornecedor</span>';
+    if(fornecedor){
+      if(fornecedor.telefone){
+        const msg = `Olá, ${fornecedor.nome}! Preciso repor a peça "${p.nome}" no meu estoque. Você tem disponível?`;
+        fornecedorCell = `${escapeHtml(fornecedor.nome)} <a class="wa-btn btn-sm" style="margin-left:6px;" href="${waLink(fornecedor.telefone, msg)}" target="_blank" rel="noopener">WhatsApp</a>`;
+      } else {
+        fornecedorCell = escapeHtml(fornecedor.nome);
+      }
+    }
     return `<tr><td>${escapeHtml(p.nome)}</td><td class="${baixo?'low-stock':''}">${p.qtd}${baixo ? ' · estoque baixo' : ''}</td>
+      <td>${fornecedorCell}</td>
       <td class="mono">R$ ${Number(p.preco).toFixed(2)}</td>
       <td><div class="row-actions"><button class="btn btn-ghost btn-sm" onclick="editPeca('${p.id}')">Editar</button><button class="btn btn-ghost btn-sm" onclick="excluirPeca('${p.id}')">Excluir</button></div></td></tr>`;
   }).join('');
