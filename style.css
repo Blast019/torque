@@ -19,10 +19,19 @@ input,select{font-family:inherit;}
 .brand-mark{width:34px;height:34px;border-radius:8px;background:var(--accent);display:flex;align-items:center;justify-content:center;font-family:'Oswald';font-weight:700;color:#1a0d05;font-size:16px;}
 .auth-card h1{font-size:19px;}
 .auth-card p.sub{color:var(--text-dim);font-size:13px;margin:2px 0 20px;}
-.field{margin-bottom:12px;}
+.field{margin-bottom:12px;position:relative;}
 .field label{display:block;font-size:12px;color:var(--text-dim);margin-bottom:5px;}
-.field input,.field select{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:7px;padding:9px 11px;color:var(--text);font-size:13.5px;}
-.field input:focus,.field select:focus{outline:none;border-color:var(--accent);}
+.field input,.field select,.field textarea{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:7px;padding:9px 11px;color:var(--text);font-size:13.5px;font-family:inherit;}
+.field textarea{resize:vertical;min-height:64px;}
+.field input:focus,.field select:focus,.field textarea:focus{outline:none;border-color:var(--accent);}
+.search-field{max-width:340px;margin-bottom:16px;}
+.autocomplete-list{position:absolute;top:100%;left:0;right:0;background:var(--surface-2);border:1px solid var(--border);border-top:none;border-radius:0 0 7px 7px;max-height:230px;overflow-y:auto;z-index:20;}
+.autocomplete-item{padding:9px 11px;cursor:pointer;border-bottom:1px solid var(--border);}
+.autocomplete-item:last-child{border-bottom:none;}
+.autocomplete-item:hover{background:var(--surface);}
+.ac-nome{font-size:13.5px;font-weight:500;}
+.ac-sub{font-size:11.5px;color:var(--text-dim);margin-top:1px;}
+.autocomplete-empty{padding:9px 11px;font-size:12.5px;color:var(--text-dim);}
 .btn{border:1px solid var(--border);background:var(--surface-2);color:var(--text);padding:9px 16px;border-radius:8px;font-size:13px;font-weight:500;display:inline-flex;align-items:center;gap:6px;}
 .btn:hover{border-color:var(--text-dim);}
 .btn-primary{background:var(--accent);border-color:var(--accent);color:#1a0d05;font-weight:600;}
