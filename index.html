@@ -5,12 +5,145 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Torque — Gestão de Oficina</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<link rel="stylesheet" href="style.css">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;700&display=swap');
+
+:root{
+  --bg:#15171A;--surface:#1E2124;--surface-2:#262A2E;--border:#34383D;
+  --text:#F2F1EC;--text-dim:#9AA0A6;--accent:#FF6A1F;--accent-dim:#3A241A;
+  --ok:#3FA34D;--ok-dim:#1C3320;--warn:#E8B93F;--warn-dim:#3A331A;--radius:10px;
+}
+*{box-sizing:border-box;}
+body{margin:0;background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;-webkit-font-smoothing:antialiased;}
+h1,h2,h3{font-family:'Oswald',sans-serif;font-weight:600;letter-spacing:0.3px;margin:0;}
+.mono{font-family:'JetBrains Mono',monospace;}
+button{font-family:inherit;cursor:pointer;}
+input,select{font-family:inherit;}
+
+/* ---- LOGIN ---- */
+.auth-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;}
+.auth-card{width:100%;max-width:360px;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:28px;}
+.auth-brand{display:flex;align-items:center;gap:10px;margin-bottom:24px;}
+.brand-mark{width:34px;height:34px;border-radius:8px;background:var(--accent);display:flex;align-items:center;justify-content:center;font-family:'Oswald';font-weight:700;color:#1a0d05;font-size:16px;}
+.auth-card h1{font-size:19px;}
+.auth-card p.sub{color:var(--text-dim);font-size:13px;margin:2px 0 20px;}
+.field{margin-bottom:12px;}
+.field label{display:block;font-size:12px;color:var(--text-dim);margin-bottom:5px;}
+.field input,.field select{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:7px;padding:9px 11px;color:var(--text);font-size:13.5px;}
+.field input:focus,.field select:focus{outline:none;border-color:var(--accent);}
+.btn{border:1px solid var(--border);background:var(--surface-2);color:var(--text);padding:9px 16px;border-radius:8px;font-size:13px;font-weight:500;display:inline-flex;align-items:center;gap:6px;}
+.btn:hover{border-color:var(--text-dim);}
+.btn-primary{background:var(--accent);border-color:var(--accent);color:#1a0d05;font-weight:600;}
+.btn-primary:hover{background:#ff7a35;}
+.btn-block{width:100%;justify-content:center;}
+.auth-toggle{text-align:center;margin-top:14px;font-size:13px;color:var(--text-dim);}
+.auth-toggle a{color:var(--accent);cursor:pointer;text-decoration:none;}
+.auth-error{background:var(--accent-dim);color:var(--accent);font-size:12.5px;padding:9px 11px;border-radius:7px;margin-bottom:12px;}
+
+/* ---- APP LAYOUT (reaproveitado do protótipo) ---- */
+.app{display:flex;min-height:100vh;}
+.sidebar{width:220px;flex-shrink:0;background:var(--surface);border-right:1px solid var(--border);padding:24px 16px;display:flex;flex-direction:column;gap:4px;}
+.brand{display:flex;align-items:center;gap:10px;margin-bottom:28px;padding:0 8px;}
+.brand-name{font-size:19px;}
+.brand-sub{font-size:11px;color:var(--text-dim);margin-top:-2px;}
+.nav-item{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:8px;color:var(--text-dim);font-size:14px;font-weight:500;border:none;background:none;text-align:left;width:100%;}
+.nav-item:hover{background:var(--surface-2);color:var(--text);}
+.nav-item.active{background:var(--accent-dim);color:var(--accent);}
+.nav-icon{width:18px;text-align:center;}
+.sidebar-foot{margin-top:auto;padding:12px 8px;border-top:1px solid var(--border);}
+.company-pill{font-size:12px;color:var(--text-dim);display:flex;align-items:center;gap:8px;margin-bottom:10px;}
+.company-dot{width:8px;height:8px;border-radius:50%;background:var(--ok);}
+.logout-btn{font-size:12px;color:var(--text-dim);background:none;border:none;padding:0;text-decoration:underline;}
+.logout-btn:hover{color:var(--text);}
+
+.main{flex:1;padding:32px 40px;max-width:1080px;}
+.topbar{display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:24px;}
+.topbar h1{font-size:26px;}
+.topbar p{color:var(--text-dim);font-size:14px;margin-top:4px;}
+.btn-ghost{background:none;border:none;color:var(--text-dim);padding:6px 8px;}
+.btn-ghost:hover{color:var(--text);}
+.btn-sm{padding:6px 10px;font-size:12px;}
+
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:28px;}
+.stat-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px 18px;}
+.stat-num{font-family:'Oswald';font-size:28px;font-weight:600;}
+.stat-label{font-size:12px;color:var(--text-dim);margin-top:2px;}
+.stat-card.overdue .stat-num{color:var(--accent);}
+.stat-card.soon .stat-num{color:var(--warn);}
+.stat-card.ok .stat-num{color:var(--ok);}
+
+.tags-wrap{display:flex;flex-direction:column;gap:10px;margin-bottom:32px;}
+.tag-card{position:relative;background:var(--surface);border:1px solid var(--border);border-left:4px solid var(--accent);border-radius:8px;padding:14px 18px 14px 22px;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;}
+.tag-card.soon{border-left-color:var(--warn);}
+.tag-card.contatado{border-left-color:var(--text-dim);opacity:0.85;}
+.tag-card.sem-retorno{border-left-color:var(--border);opacity:0.7;}
+.tag-left{display:flex;align-items:center;gap:14px;}
+.plate{background:#F2F1EC;color:#15171A;border-radius:5px;padding:5px 9px;font-family:'JetBrains Mono';font-weight:700;font-size:13px;letter-spacing:1px;border-top:3px solid #2F6FE0;min-width:78px;text-align:center;}
+.tag-info .cliente{font-weight:600;font-size:14.5px;}
+.tag-info .veiculo{font-size:12.5px;color:var(--text-dim);margin-top:1px;}
+.tag-status{font-size:12px;font-weight:600;padding:4px 10px;border-radius:20px;white-space:nowrap;}
+.tag-status.overdue{background:var(--accent-dim);color:var(--accent);}
+.tag-status.soon{background:var(--warn-dim);color:var(--warn);}
+.tag-right{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.wa-btn{background:#1F5C3D;color:#BFF0D3;border:none;border-radius:8px;padding:8px 13px;font-size:12.5px;font-weight:600;display:flex;align-items:center;gap:6px;text-decoration:none;}
+.wa-btn:hover{background:#256F49;}
+.contato-badge{font-size:11.5px;color:var(--text-dim);white-space:nowrap;}
+.aviso-count{font-size:11px;color:var(--text-dim);background:var(--surface-2);padding:2px 8px;border-radius:20px;white-space:nowrap;}
+.btn-link{background:none;border:none;color:var(--text-dim);font-size:12px;text-decoration:underline;padding:0;}
+.btn-link:hover{color:var(--text);}
+.queue-group-label{font-size:12px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.5px;margin:18px 0 8px;}
+.queue-group-label:first-child{margin-top:0;}
+.empty-note{color:var(--text-dim);font-size:13.5px;padding:18px 4px;}
+
+.section-head{display:flex;justify-content:space-between;align-items:center;margin:8px 0 14px;}
+.section-head h2{font-size:17px;}
+.table-wrap{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;overflow-x:auto;}
+table{width:100%;border-collapse:collapse;font-size:13.5px;}
+th{text-align:left;color:var(--text-dim);font-weight:500;font-size:11.5px;text-transform:uppercase;letter-spacing:0.5px;padding:12px 16px;border-bottom:1px solid var(--border);}
+td{padding:12px 16px;border-bottom:1px solid var(--border);}
+tr:last-child td{border-bottom:none;}
+tr:hover td{background:var(--surface-2);}
+.row-actions{display:flex;gap:4px;justify-content:flex-end;}
+.tag-pill{font-size:11px;padding:2px 8px;border-radius:20px;background:var(--surface-2);color:var(--text-dim);}
+.low-stock{color:var(--accent);font-weight:600;}
+
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,0.55);display:none;align-items:center;justify-content:center;z-index:50;padding:20px;}
+.overlay.show{display:flex;}
+.modal{background:var(--surface);border:1px solid var(--border);border-radius:12px;width:100%;max-width:420px;padding:24px;}
+.modal h3{font-size:17px;margin-bottom:16px;}
+.modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:18px;}
+
+.hidden{display:none !important;}
+.loading{padding:60px;text-align:center;color:var(--text-dim);}
+
+@media(max-width:820px){
+  .sidebar{width:70px;padding:20px 10px;}
+  .brand-name,.brand-sub,.nav-label,.company-pill span,.logout-btn{display:none;}
+  .nav-item{justify-content:center;}
+  .main{padding:20px;}
+  .stats{grid-template-columns:repeat(2,1fr);}
+}
+
+.agenda-nav{display:flex;align-items:center;gap:10px;margin-bottom:18px;}
+.agenda-data-label{font-family:'Oswald';font-size:15px;min-width:150px;text-align:center;}
+.agenda-list{display:flex;flex-direction:column;gap:10px;}
+.agenda-card{background:var(--surface);border:1px solid var(--border);border-left:4px solid var(--ok);border-radius:8px;padding:14px 18px;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;}
+.agenda-card.concluido{border-left-color:var(--text-dim);opacity:0.7;}
+.agenda-card.cancelado{border-left-color:var(--border);opacity:0.5;}
+.agenda-hora{font-family:'JetBrains Mono';font-weight:700;font-size:15px;min-width:52px;}
+.agenda-info .cliente{font-weight:600;font-size:14.5px;}
+.agenda-info .detalhe{font-size:12.5px;color:var(--text-dim);margin-top:1px;}
+.agenda-status-pill{font-size:11px;padding:2px 8px;border-radius:20px;background:var(--surface-2);color:var(--text-dim);white-space:nowrap;}
+</style>
 </head>
 <body>
 
-<!-- Configuração do Supabase -->
-<script src="config.js"></script>
+<!-- ============ CONFIGURE AQUI ============ -->
+<script>
+  const SUPABASE_URL = 'COLE_AQUI_A_URL_DO_SEU_PROJETO_SUPABASE';
+  const SUPABASE_ANON_KEY = 'COLE_AQUI_A_ANON_KEY_DO_SEU_PROJETO_SUPABASE';
+</script>
+<!-- ========================================= -->
 
 <div id="authScreen" class="auth-wrap">
   <div class="auth-card">
@@ -36,11 +169,10 @@
       <div><div class="brand-name">Torque</div><div class="brand-sub">gestão de oficina</div></div>
     </div>
     <button class="nav-item active" data-tab="painel"><span class="nav-icon">◈</span><span class="nav-label">Painel</span></button>
-    <button class="nav-item" data-tab="agendamentos"><span class="nav-icon">🗓</span><span class="nav-label">Agendamentos</span></button>
     <button class="nav-item" data-tab="clientes"><span class="nav-icon">☰</span><span class="nav-label">Clientes</span></button>
     <button class="nav-item" data-tab="veiculos"><span class="nav-icon">▤</span><span class="nav-label">Veículos</span></button>
     <button class="nav-item" data-tab="pecas"><span class="nav-icon">⚙</span><span class="nav-label">Peças</span></button>
-    <button class="nav-item" data-tab="fornecedores"><span class="nav-icon">☏</span><span class="nav-label">Fornecedores</span></button>
+    <button class="nav-item" data-tab="agenda"><span class="nav-icon">🗓</span><span class="nav-label">Agenda</span></button>
     <div class="sidebar-foot">
       <div class="company-pill"><div class="company-dot"></div><span id="empresaNomeLabel">—</span></div>
       <button class="logout-btn" id="logoutBtn">Sair da conta</button>
@@ -63,34 +195,33 @@
         <div class="tags-wrap" id="tagsWrap"></div>
       </div>
 
-      <div class="tab-panel hidden" id="tab-agendamentos">
-        <div class="topbar"><div><h1>Agendamentos</h1><p>Serviços marcados e motivo da visita</p></div><button class="btn btn-primary" id="btnNovoAgendamento">+ Novo agendamento</button></div>
-        <div class="field search-field"><input type="text" id="buscaAgendamentos" placeholder="Buscar por cliente, placa ou observação..."></div>
-        <div class="table-wrap"><table><thead><tr><th>Cliente</th><th>Veículo</th><th>Data</th><th>Observação</th><th>Status</th><th></th></tr></thead><tbody id="agendamentosBody"></tbody></table></div>
-      </div>
-
       <div class="tab-panel hidden" id="tab-clientes">
         <div class="topbar"><div><h1>Clientes</h1><p>Base de contatos da oficina</p></div><button class="btn btn-primary" id="btnNovoCliente">+ Novo cliente</button></div>
-        <div class="field search-field"><input type="text" id="buscaClientes" placeholder="Buscar por nome ou telefone..."></div>
         <div class="table-wrap"><table><thead><tr><th>Nome</th><th>Telefone</th><th>Veículos</th><th></th></tr></thead><tbody id="clientesBody"></tbody></table></div>
       </div>
 
       <div class="tab-panel hidden" id="tab-veiculos">
         <div class="topbar"><div><h1>Veículos</h1><p>Frota atendida pela oficina</p></div><button class="btn btn-primary" id="btnNovoVeiculo">+ Novo veículo</button></div>
-        <div class="field search-field"><input type="text" id="buscaVeiculos" placeholder="Buscar por placa, modelo ou cliente..."></div>
         <div class="table-wrap"><table><thead><tr><th>Placa</th><th>Modelo</th><th>Cliente</th><th>Próxima revisão</th><th></th></tr></thead><tbody id="veiculosBody"></tbody></table></div>
       </div>
 
       <div class="tab-panel hidden" id="tab-pecas">
         <div class="topbar"><div><h1>Peças</h1><p>Estoque de peças e insumos</p></div><button class="btn btn-primary" id="btnNovaPeca">+ Nova peça</button></div>
-        <div class="field search-field"><input type="text" id="buscaPecas" placeholder="Buscar por nome da peça..."></div>
-        <div class="table-wrap"><table><thead><tr><th>Peça</th><th>Qtd. em estoque</th><th>Fornecedor</th><th>Preço venda</th><th></th></tr></thead><tbody id="pecasBody"></tbody></table></div>
+        <div class="table-wrap"><table><thead><tr><th>Peça</th><th>Qtd. em estoque</th><th>Preço venda</th><th></th></tr></thead><tbody id="pecasBody"></tbody></table></div>
       </div>
 
-      <div class="tab-panel hidden" id="tab-fornecedores">
-        <div class="topbar"><div><h1>Fornecedores</h1><p>Contatos para reposição de peças</p></div><button class="btn btn-primary" id="btnNovoFornecedor">+ Novo fornecedor</button></div>
-        <div class="field search-field"><input type="text" id="buscaFornecedores" placeholder="Buscar por nome ou telefone..."></div>
-        <div class="table-wrap"><table><thead><tr><th>Nome</th><th>Telefone</th><th>Peças</th><th></th></tr></thead><tbody id="fornecedoresBody"></tbody></table></div>
+      <div class="tab-panel hidden" id="tab-agenda">
+        <div class="topbar">
+          <div><h1>Agenda</h1><p>Horários combinados com os clientes</p></div>
+          <button class="btn btn-primary" id="btnNovoAgendamento">+ Novo agendamento</button>
+        </div>
+        <div class="agenda-nav">
+          <button class="btn btn-sm" id="agendaDiaAnterior">‹</button>
+          <div class="agenda-data-label" id="agendaDataLabel">Hoje</div>
+          <button class="btn btn-sm" id="agendaDiaSeguinte">›</button>
+          <button class="btn btn-sm" id="agendaHoje">Hoje</button>
+        </div>
+        <div class="agenda-list" id="agendaList"></div>
       </div>
     </div>
   </div>
@@ -122,34 +253,582 @@
   <div class="field"><label>Quantidade em estoque</label><input type="number" id="pecaQtd" placeholder="0"></div>
   <div class="field"><label>Estoque mínimo (alerta)</label><input type="number" id="pecaMin" placeholder="0"></div>
   <div class="field"><label>Preço de venda (R$)</label><input type="number" step="0.01" id="pecaPreco" placeholder="0.00"></div>
-  <div class="field"><label>Fornecedor (opcional)</label><select id="pecaFornecedor"><option value="">Nenhum</option></select></div>
   <div class="modal-actions"><button class="btn" onclick="closeModal('overlayPeca')">Cancelar</button><button class="btn btn-primary" id="salvarPecaBtn">Salvar</button></div>
-</div></div>
-
-<div class="overlay" id="overlayFornecedor"><div class="modal">
-  <h3 id="modalFornecedorTitle">Novo fornecedor</h3>
-  <input type="hidden" id="fornecedorId">
-  <div class="field"><label>Nome</label><input id="fornecedorNome" placeholder="Nome do fornecedor"></div>
-  <div class="field"><label>Telefone (WhatsApp, com DDD)</label><input id="fornecedorTelefone" placeholder="11 91234-5678"></div>
-  <div class="modal-actions"><button class="btn" onclick="closeModal('overlayFornecedor')">Cancelar</button><button class="btn btn-primary" id="salvarFornecedorBtn">Salvar</button></div>
 </div></div>
 
 <div class="overlay" id="overlayAgendamento"><div class="modal">
   <h3 id="modalAgendamentoTitle">Novo agendamento</h3>
   <input type="hidden" id="agendamentoId">
-  <input type="hidden" id="agendamentoClienteId">
-  <div class="field">
-    <label>Cliente</label>
-    <input type="text" id="agendamentoBuscaCliente" placeholder="Buscar por nome, telefone ou placa..." autocomplete="off">
-    <div id="agendamentoSugestoes" class="autocomplete-list hidden"></div>
-  </div>
-  <div class="field"><label>Veículo</label><select id="agendamentoVeiculo"><option value="">Busque um cliente primeiro</option></select></div>
+  <div class="field"><label>Cliente</label><select id="agendamentoCliente"></select></div>
+  <div class="field"><label>Veículo (opcional)</label><select id="agendamentoVeiculo"><option value="">—</option></select></div>
   <div class="field"><label>Data</label><input type="date" id="agendamentoData"></div>
-  <div class="field"><label>Horário (opcional)</label><input type="time" id="agendamentoHorario"></div>
-  <div class="field"><label>Observação (motivo da visita)</label><textarea id="agendamentoObservacao" rows="3" placeholder="Ex: Carro falhando ao frear"></textarea></div>
+  <div class="field"><label>Horário combinado</label><input type="text" id="agendamentoHora" placeholder="Ex: 14h30, ou 'na parte da manhã'"></div>
+  <div class="field"><label>Serviço</label><input type="text" id="agendamentoServico" placeholder="Ex: Troca de óleo e filtros"></div>
+  <div class="field"><label>Observação (opcional)</label><input type="text" id="agendamentoObs" placeholder=""></div>
   <div class="modal-actions"><button class="btn" onclick="closeModal('overlayAgendamento')">Cancelar</button><button class="btn btn-primary" id="salvarAgendamentoBtn">Salvar</button></div>
 </div></div>
 
-<script src="script.js"></script>
+<script>
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const DIAS_AGUARDANDO_RETORNO = 5;
+const LIMITE_AVISOS = 3;
+
+let empresaId = null;
+let data = { clientes: [], veiculos: [], pecas: [], agendamentos: [] };
+let modoCadastro = false;
+let agendaCursor = new Date(); agendaCursor.setHours(0,0,0,0);
+
+// ---------------- AUTH ----------------
+document.getElementById('authToggleLink').addEventListener('click', ()=>{
+  modoCadastro = !modoCadastro;
+  document.getElementById('authTitle').textContent = modoCadastro ? 'Criar conta' : 'Entrar';
+  document.getElementById('authSub').textContent = modoCadastro ? 'Cadastre sua oficina no Torque' : 'Acesse o painel da sua oficina';
+  document.getElementById('authNomeField').classList.toggle('hidden', !modoCadastro);
+  document.getElementById('authSubmitBtn').textContent = modoCadastro ? 'Criar conta' : 'Entrar';
+  document.getElementById('authToggle').innerHTML = modoCadastro
+    ? 'Já tem conta? <a id="authToggleLink2">Entrar</a>'
+    : 'Ainda não tem conta? <a id="authToggleLink">Criar conta</a>';
+  const link2 = document.getElementById('authToggleLink2');
+  if(link2) link2.addEventListener('click', ()=>document.getElementById('authToggleLink').click());
+});
+
+document.getElementById('authSubmitBtn').addEventListener('click', async ()=>{
+  const email = document.getElementById('authEmail').value.trim();
+  const password = document.getElementById('authPassword').value;
+  const nomeOficina = document.getElementById('authNomeOficina').value.trim();
+  const errEl = document.getElementById('authError');
+  errEl.classList.add('hidden');
+
+  if(!email || !password){ showAuthError('Preencha e-mail e senha.'); return; }
+
+  if(modoCadastro){
+    const { data: signData, error } = await sb.auth.signUp({ email, password });
+    if(error){ showAuthError(error.message); return; }
+    // cria a empresa vinculada ao novo usuário
+    if(signData.user){
+      await sb.from('empresas').insert({ owner_id: signData.user.id, nome: nomeOficina || 'Minha oficina' });
+    }
+    if(!signData.session){
+      showAuthError('Conta criada! Verifique seu e-mail para confirmar antes de entrar.');
+      return;
+    }
+    await iniciarApp();
+  } else {
+    const { error } = await sb.auth.signInWithPassword({ email, password });
+    if(error){ showAuthError(error.message); return; }
+    await iniciarApp();
+  }
+});
+
+function showAuthError(msg){
+  const el = document.getElementById('authError');
+  el.textContent = msg;
+  el.classList.remove('hidden');
+}
+
+document.getElementById('logoutBtn').addEventListener('click', async ()=>{
+  await sb.auth.signOut();
+  location.reload();
+});
+
+async function checkSessaoExistente(){
+  const { data: { session } } = await sb.auth.getSession();
+  if(session) await iniciarApp();
+}
+
+async function iniciarApp(){
+  const { data: { user } } = await sb.auth.getUser();
+  if(!user) return;
+
+  let { data: empresas } = await sb.from('empresas').select('*').eq('owner_id', user.id).limit(1);
+  if(!empresas || empresas.length===0){
+    const { data: novaEmpresa } = await sb.from('empresas').insert({ owner_id: user.id, nome: 'Minha oficina' }).select();
+    empresas = novaEmpresa;
+  }
+  const empresa = empresas[0];
+  empresaId = empresa.id;
+  document.getElementById('empresaNomeLabel').textContent = empresa.nome;
+
+  document.getElementById('authScreen').classList.add('hidden');
+  document.getElementById('appScreen').classList.remove('hidden');
+
+  await carregarDados();
+}
+
+// ---------------- DADOS ----------------
+async function carregarDados(){
+  document.getElementById('loadingState').classList.remove('hidden');
+  document.getElementById('appContent').classList.add('hidden');
+
+  const [{ data: clientes }, { data: veiculos }, { data: pecas }, { data: agendamentos }] = await Promise.all([
+    sb.from('clientes').select('*').eq('empresa_id', empresaId).order('nome'),
+    sb.from('veiculos').select('*').eq('empresa_id', empresaId),
+    sb.from('pecas').select('*').eq('empresa_id', empresaId).order('nome'),
+    sb.from('agendamentos').select('*').eq('empresa_id', empresaId),
+  ]);
+  data.clientes = clientes || [];
+  data.veiculos = veiculos || [];
+  data.pecas = pecas || [];
+  data.agendamentos = agendamentos || [];
+
+  document.getElementById('loadingState').classList.add('hidden');
+  document.getElementById('appContent').classList.remove('hidden');
+  renderAll();
+}
+
+document.querySelectorAll('.nav-item').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    document.querySelectorAll('.nav-item').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    document.querySelectorAll('.tab-panel').forEach(p=>p.classList.add('hidden'));
+    document.getElementById('tab-'+btn.dataset.tab).classList.remove('hidden');
+  });
+});
+
+function closeModal(id){ document.getElementById(id).classList.remove('show'); }
+function openModal(id){ document.getElementById(id).classList.add('show'); }
+
+// ---------------- CLIENTES ----------------
+document.getElementById('btnNovoCliente').addEventListener('click', ()=>{
+  document.getElementById('modalClienteTitle').textContent = 'Novo cliente';
+  document.getElementById('clienteId').value = '';
+  document.getElementById('clienteNome').value = '';
+  document.getElementById('clienteTelefone').value = '';
+  openModal('overlayCliente');
+});
+
+function editCliente(id){
+  const c = data.clientes.find(x=>x.id===id);
+  if(!c) return;
+  document.getElementById('modalClienteTitle').textContent = 'Editar cliente';
+  document.getElementById('clienteId').value = c.id;
+  document.getElementById('clienteNome').value = c.nome;
+  document.getElementById('clienteTelefone').value = c.telefone || '';
+  openModal('overlayCliente');
+}
+
+document.getElementById('salvarClienteBtn').addEventListener('click', async ()=>{
+  const id = document.getElementById('clienteId').value;
+  const nome = document.getElementById('clienteNome').value.trim();
+  const telefone = document.getElementById('clienteTelefone').value.trim();
+  if(!nome){ alert('Informe o nome do cliente.'); return; }
+  if(id){
+    await sb.from('clientes').update({ nome, telefone }).eq('id', id);
+  } else {
+    await sb.from('clientes').insert({ empresa_id: empresaId, nome, telefone });
+  }
+  closeModal('overlayCliente');
+  await carregarDados();
+});
+
+async function excluirCliente(id){
+  if(!confirm('Excluir este cliente?')) return;
+  await sb.from('clientes').delete().eq('id', id);
+  await carregarDados();
+}
+
+// ---------------- VEICULOS ----------------
+document.getElementById('btnNovoVeiculo').addEventListener('click', ()=>{
+  if(data.clientes.length===0){ alert('Cadastre um cliente antes de adicionar um veículo.'); return; }
+  document.getElementById('modalVeiculoTitle').textContent = 'Novo veículo';
+  document.getElementById('veiculoId').value = '';
+  document.getElementById('veiculoPlaca').value = '';
+  document.getElementById('veiculoModelo').value = '';
+  document.getElementById('veiculoProximaRevisao').value = '';
+  populateClienteSelect();
+  openModal('overlayVeiculo');
+});
+
+function populateClienteSelect(selectedId){
+  const sel = document.getElementById('veiculoCliente');
+  sel.innerHTML = data.clientes.map(c=>`<option value="${c.id}">${escapeHtml(c.nome)}</option>`).join('');
+  if(selectedId) sel.value = selectedId;
+}
+
+function editVeiculo(id){
+  const v = data.veiculos.find(x=>x.id===id);
+  if(!v) return;
+  document.getElementById('modalVeiculoTitle').textContent = 'Editar veículo';
+  document.getElementById('veiculoId').value = v.id;
+  document.getElementById('veiculoPlaca').value = v.placa;
+  document.getElementById('veiculoModelo').value = v.modelo;
+  document.getElementById('veiculoProximaRevisao').value = v.proxima_revisao || '';
+  populateClienteSelect(v.cliente_id);
+  openModal('overlayVeiculo');
+}
+
+document.getElementById('salvarVeiculoBtn').addEventListener('click', async ()=>{
+  const id = document.getElementById('veiculoId').value;
+  const cliente_id = document.getElementById('veiculoCliente').value;
+  const placa = document.getElementById('veiculoPlaca').value.trim().toUpperCase();
+  const modelo = document.getElementById('veiculoModelo').value.trim();
+  const proxima_revisao = document.getElementById('veiculoProximaRevisao').value || null;
+  if(!placa || !modelo){ alert('Informe placa e modelo.'); return; }
+  if(id){
+    await sb.from('veiculos').update({ cliente_id, placa, modelo, proxima_revisao }).eq('id', id);
+  } else {
+    await sb.from('veiculos').insert({ empresa_id: empresaId, cliente_id, placa, modelo, proxima_revisao });
+  }
+  closeModal('overlayVeiculo');
+  await carregarDados();
+});
+
+async function excluirVeiculo(id){
+  if(!confirm('Excluir este veículo?')) return;
+  await sb.from('veiculos').delete().eq('id', id);
+  await carregarDados();
+}
+
+async function marcarContatado(veiculoId){
+  const v = data.veiculos.find(x=>x.id===veiculoId);
+  if(!v) return;
+  const hoje = new Date().toISOString().slice(0,10);
+  const novoCount = (v.contatos_count || 0) + 1;
+  await sb.from('veiculos').update({ ultimo_contato: hoje, contatos_count: novoCount }).eq('id', veiculoId);
+  v.ultimo_contato = hoje;
+  v.contatos_count = novoCount;
+  renderPainel();
+}
+
+async function marcarRevisaoFeita(veiculoId){
+  const novaData = prompt('Nova data da próxima revisão (AAAA-MM-DD):', '');
+  if(!novaData) return;
+  await sb.from('veiculos').update({ proxima_revisao: novaData, ultimo_contato: null, contatos_count: 0, sem_retorno: false }).eq('id', veiculoId);
+  await carregarDados();
+}
+
+async function reabrirFila(veiculoId){
+  await sb.from('veiculos').update({ sem_retorno: false, contatos_count: 0, ultimo_contato: null }).eq('id', veiculoId);
+  await carregarDados();
+}
+
+// ---------------- PECAS ----------------
+document.getElementById('btnNovaPeca').addEventListener('click', ()=>{
+  document.getElementById('modalPecaTitle').textContent = 'Nova peça';
+  document.getElementById('pecaId').value = '';
+  document.getElementById('pecaNome').value = '';
+  document.getElementById('pecaQtd').value = '';
+  document.getElementById('pecaMin').value = '';
+  document.getElementById('pecaPreco').value = '';
+  openModal('overlayPeca');
+});
+
+function editPeca(id){
+  const p = data.pecas.find(x=>x.id===id);
+  if(!p) return;
+  document.getElementById('modalPecaTitle').textContent = 'Editar peça';
+  document.getElementById('pecaId').value = p.id;
+  document.getElementById('pecaNome').value = p.nome;
+  document.getElementById('pecaQtd').value = p.qtd;
+  document.getElementById('pecaMin').value = p.estoque_minimo;
+  document.getElementById('pecaPreco').value = p.preco;
+  openModal('overlayPeca');
+}
+
+document.getElementById('salvarPecaBtn').addEventListener('click', async ()=>{
+  const id = document.getElementById('pecaId').value;
+  const nome = document.getElementById('pecaNome').value.trim();
+  const qtd = parseInt(document.getElementById('pecaQtd').value) || 0;
+  const estoque_minimo = parseInt(document.getElementById('pecaMin').value) || 0;
+  const preco = parseFloat(document.getElementById('pecaPreco').value) || 0;
+  if(!nome){ alert('Informe o nome da peça.'); return; }
+  if(id){
+    await sb.from('pecas').update({ nome, qtd, estoque_minimo, preco }).eq('id', id);
+  } else {
+    await sb.from('pecas').insert({ empresa_id: empresaId, nome, qtd, estoque_minimo, preco });
+  }
+  closeModal('overlayPeca');
+  await carregarDados();
+});
+
+async function excluirPeca(id){
+  if(!confirm('Excluir esta peça do estoque?')) return;
+  await sb.from('pecas').delete().eq('id', id);
+  await carregarDados();
+}
+
+// ---------------- AGENDA ----------------
+document.getElementById('btnNovoAgendamento').addEventListener('click', ()=>{
+  if(data.clientes.length===0){ alert('Cadastre um cliente antes de criar um agendamento.'); return; }
+  abrirAgendaModal(null);
+});
+
+function populateVeiculoSelect(clienteId, selectedVeiculoId){
+  const sel = document.getElementById('agendamentoVeiculo');
+  const veiculosDoCliente = data.veiculos.filter(v=>v.cliente_id===clienteId);
+  sel.innerHTML = '<option value="">—</option>' + veiculosDoCliente.map(v=>`<option value="${v.id}">${escapeHtml(v.placa)} · ${escapeHtml(v.modelo)}</option>`).join('');
+  if(selectedVeiculoId) sel.value = selectedVeiculoId;
+}
+
+document.getElementById('agendamentoCliente').addEventListener('change', (e)=>{
+  populateVeiculoSelect(e.target.value);
+});
+
+function abrirAgendaModal(veiculoId){
+  document.getElementById('modalAgendamentoTitle').textContent = 'Novo agendamento';
+  document.getElementById('agendamentoId').value = '';
+  document.getElementById('agendamentoData').value = new Date().toISOString().slice(0,10);
+  document.getElementById('agendamentoHora').value = '';
+  document.getElementById('agendamentoServico').value = '';
+  document.getElementById('agendamentoObs').value = '';
+
+  const clienteSel = document.getElementById('agendamentoCliente');
+  clienteSel.innerHTML = data.clientes.map(c=>`<option value="${c.id}">${escapeHtml(c.nome)}</option>`).join('');
+
+  let clienteId = data.clientes[0] ? data.clientes[0].id : null;
+  if(veiculoId){
+    const v = data.veiculos.find(x=>x.id===veiculoId);
+    if(v && v.cliente_id) clienteId = v.cliente_id;
+  }
+  if(clienteId) clienteSel.value = clienteId;
+  populateVeiculoSelect(clienteId, veiculoId);
+  openModal('overlayAgendamento');
+}
+
+function editAgendamento(id){
+  const a = data.agendamentos.find(x=>x.id===id);
+  if(!a) return;
+  document.getElementById('modalAgendamentoTitle').textContent = 'Editar agendamento';
+  document.getElementById('agendamentoId').value = a.id;
+  document.getElementById('agendamentoData').value = a.data;
+  document.getElementById('agendamentoHora').value = a.hora || '';
+  document.getElementById('agendamentoServico').value = a.servico || '';
+  document.getElementById('agendamentoObs').value = a.observacao || '';
+  const clienteSel = document.getElementById('agendamentoCliente');
+  clienteSel.innerHTML = data.clientes.map(c=>`<option value="${c.id}">${escapeHtml(c.nome)}</option>`).join('');
+  if(a.cliente_id) clienteSel.value = a.cliente_id;
+  populateVeiculoSelect(a.cliente_id, a.veiculo_id);
+  openModal('overlayAgendamento');
+}
+
+document.getElementById('salvarAgendamentoBtn').addEventListener('click', async ()=>{
+  const id = document.getElementById('agendamentoId').value;
+  const cliente_id = document.getElementById('agendamentoCliente').value || null;
+  const veiculo_id = document.getElementById('agendamentoVeiculo').value || null;
+  const dataAg = document.getElementById('agendamentoData').value;
+  const hora = document.getElementById('agendamentoHora').value.trim();
+  const servico = document.getElementById('agendamentoServico').value.trim();
+  const observacao = document.getElementById('agendamentoObs').value.trim();
+  if(!dataAg){ alert('Informe a data do agendamento.'); return; }
+  if(id){
+    await sb.from('agendamentos').update({ cliente_id, veiculo_id, data: dataAg, hora, servico, observacao }).eq('id', id);
+  } else {
+    await sb.from('agendamentos').insert({ empresa_id: empresaId, cliente_id, veiculo_id, data: dataAg, hora, servico, observacao, status: 'agendado' });
+    // se veio da fila de revisão, já registra como contato feito
+    if(veiculo_id) await marcarContatado(veiculo_id);
+  }
+  closeModal('overlayAgendamento');
+  await carregarDados();
+});
+
+async function concluirAgendamento(id){
+  const a = data.agendamentos.find(x=>x.id===id);
+  if(!a) return;
+  await sb.from('agendamentos').update({ status: 'concluido' }).eq('id', id);
+  if(a.veiculo_id){
+    const novaData = prompt('Revisão concluída! Qual a data da próxima revisão? (AAAA-MM-DD, opcional)', '');
+    if(novaData){
+      await sb.from('veiculos').update({ proxima_revisao: novaData, ultimo_contato: null, contatos_count: 0, sem_retorno: false }).eq('id', a.veiculo_id);
+    }
+  }
+  await carregarDados();
+}
+
+async function cancelarAgendamento(id){
+  await sb.from('agendamentos').update({ status: 'cancelado' }).eq('id', id);
+  await carregarDados();
+}
+
+async function excluirAgendamento(id){
+  if(!confirm('Excluir este agendamento?')) return;
+  await sb.from('agendamentos').delete().eq('id', id);
+  await carregarDados();
+}
+
+document.getElementById('agendaDiaAnterior').addEventListener('click', ()=>{ agendaCursor.setDate(agendaCursor.getDate()-1); renderAgenda(); });
+document.getElementById('agendaDiaSeguinte').addEventListener('click', ()=>{ agendaCursor.setDate(agendaCursor.getDate()+1); renderAgenda(); });
+document.getElementById('agendaHoje').addEventListener('click', ()=>{ agendaCursor = new Date(); agendaCursor.setHours(0,0,0,0); renderAgenda(); });
+
+function renderAgenda(){
+  const cursorStr = agendaCursor.toISOString().slice(0,10);
+  const hoje = new Date(); hoje.setHours(0,0,0,0);
+  const label = agendaCursor.getTime()===hoje.getTime() ? 'Hoje · ' : '';
+  document.getElementById('agendaDataLabel').textContent = label + agendaCursor.toLocaleDateString('pt-BR', { weekday:'short', day:'2-digit', month:'2-digit' });
+
+  const doDia = data.agendamentos
+    .filter(a=>a.data===cursorStr)
+    .sort((a,b)=>(a.hora||'').localeCompare(b.hora||''));
+
+  const list = document.getElementById('agendaList');
+  if(doDia.length===0){
+    list.innerHTML = `<div class="empty-note">Nenhum agendamento para este dia.</div>`;
+    return;
+  }
+  list.innerHTML = doDia.map(a=>{
+    const cliente = data.clientes.find(c=>c.id===a.cliente_id);
+    const veiculo = data.veiculos.find(v=>v.id===a.veiculo_id);
+    const detalhe = [veiculo ? `${veiculo.placa} · ${veiculo.modelo}` : null, a.servico].filter(Boolean).join(' — ');
+    const acoes = a.status === 'agendado'
+      ? `<button class="btn-link" onclick="concluirAgendamento('${a.id}')">Concluir</button><button class="btn-link" onclick="cancelarAgendamento('${a.id}')">Cancelar</button><button class="btn-link" onclick="editAgendamento('${a.id}')">Editar</button>`
+      : `<button class="btn-link" onclick="excluirAgendamento('${a.id}')">Excluir</button>`;
+    return `<div class="agenda-card ${a.status}">
+      <div class="tag-left">
+        <div class="agenda-hora">${escapeHtml(a.hora || '—')}</div>
+        <div class="agenda-info">
+          <div class="cliente">${cliente ? escapeHtml(cliente.nome) : 'Cliente não vinculado'}</div>
+          <div class="detalhe">${escapeHtml(detalhe || a.observacao || '')}</div>
+        </div>
+      </div>
+      <div class="tag-right">
+        ${a.status !== 'agendado' ? `<span class="agenda-status-pill">${a.status === 'concluido' ? 'Concluído' : 'Cancelado'}</span>` : ''}
+        ${acoes}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ---------------- HELPERS ----------------
+function escapeHtml(s){ return (s||'').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+function diasAte(dataStr){ if(!dataStr) return null; const hoje = new Date(); hoje.setHours(0,0,0,0); const alvo = new Date(dataStr+'T00:00:00'); return Math.round((alvo - hoje) / 86400000); }
+function waLink(telefone, mensagem){ const digits = (telefone||'').replace(/\D/g,''); const withCountry = digits.startsWith('55') ? digits : '55'+digits; return `https://wa.me/${withCountry}?text=${encodeURIComponent(mensagem)}`; }
+
+// ---------------- RENDER ----------------
+function renderAll(){ renderPainel(); renderClientes(); renderVeiculos(); renderPecas(); renderAgenda(); }
+
+function tagCardHtml(v, cliente, dias, opts){
+  const overdue = dias < 0;
+  const statusLabel = overdue ? `${Math.abs(dias)} dia${Math.abs(dias)===1?'':'s'} vencida` : (dias===0 ? 'Vence hoje' : `Vence em ${dias} dia${dias===1?'':'s'}`);
+  const nomeCliente = cliente ? cliente.nome : 'Cliente não vinculado';
+  const telefone = cliente ? cliente.telefone : '';
+  const avisos = v.contatos_count || 0;
+  const msg = `Olá, ${nomeCliente.split(' ')[0]}! Aqui é da oficina. A revisão do seu ${v.modelo} (placa ${v.placa}) está ${overdue ? 'vencida' : 'próxima do vencimento'}. Podemos agendar um horário para você?`;
+  const waButton = telefone
+    ? `<a class="wa-btn" href="${waLink(telefone, msg)}" target="_blank" rel="noopener" onclick="marcarContatado('${v.id}')">${opts.contatado ? 'Chamar de novo' : 'Chamar no WhatsApp'}</a>`
+    : `<span class="tag-pill">sem telefone</span>`;
+
+  if(opts.semRetorno){
+    return `<div class="tag-card sem-retorno">
+      <div class="tag-left"><div class="plate">${escapeHtml(v.placa||'---')}</div>
+        <div class="tag-info"><div class="cliente">${escapeHtml(nomeCliente)}</div><div class="veiculo">${escapeHtml(v.modelo||'')}</div></div></div>
+      <div class="tag-right">
+        <span class="aviso-count">${avisos}/${LIMITE_AVISOS} avisos enviados</span>
+        <button class="btn-link" onclick="abrirAgendaModal('${v.id}')">Agendar</button>
+        <button class="btn-link" onclick="reabrirFila('${v.id}')">Reabrir na fila</button>
+      </div></div>`;
+  }
+
+  return `<div class="tag-card ${opts.contatado ? 'contatado' : (overdue?'':'soon')}">
+    <div class="tag-left"><div class="plate">${escapeHtml(v.placa||'---')}</div>
+      <div class="tag-info"><div class="cliente">${escapeHtml(nomeCliente)}</div><div class="veiculo">${escapeHtml(v.modelo||'')}</div></div></div>
+    <div class="tag-right">
+      ${avisos > 0 ? `<span class="aviso-count">${avisos}/${LIMITE_AVISOS} avisos</span>` : ''}
+      ${opts.contatado ? `<span class="contato-badge">Avisado há ${opts.diasContato} dia${opts.diasContato===1?'':'s'}</span>` : `<span class="tag-status ${overdue?'overdue':'soon'}">${statusLabel}</span>`}
+      <button class="btn-link" onclick="abrirAgendaModal('${v.id}')">Agendar</button>
+      ${waButton}
+    </div></div>`;
+}
+
+async function atualizarStatusFila(){
+  const updates = [];
+  data.veiculos.forEach(v=>{
+    if(!v.proxima_revisao || v.sem_retorno) return;
+    const diasContato = v.ultimo_contato ? diasAte(v.ultimo_contato) * -1 : null;
+    const passouEspera = diasContato !== null && diasContato >= DIAS_AGUARDANDO_RETORNO;
+    if(passouEspera && (v.contatos_count||0) >= LIMITE_AVISOS){
+      v.sem_retorno = true;
+      updates.push(sb.from('veiculos').update({ sem_retorno: true }).eq('id', v.id));
+    }
+  });
+  if(updates.length) await Promise.all(updates);
+}
+
+async function renderPainel(){
+  await atualizarStatusFila();
+  const linhas = data.veiculos
+    .filter(v=>v.proxima_revisao)
+    .map(v=>{
+      const dias = diasAte(v.proxima_revisao);
+      const cliente = data.clientes.find(c=>c.id===v.cliente_id);
+      const diasContato = v.ultimo_contato ? diasAte(v.ultimo_contato) * -1 : null;
+      const aguardandoRetorno = v.ultimo_contato && diasContato !== null && diasContato < DIAS_AGUARDANDO_RETORNO;
+      return { v, cliente, dias, diasContato, aguardandoRetorno, semRetorno: !!v.sem_retorno };
+    })
+    .filter(x=>x.dias !== null && x.dias <= 30)
+    .sort((a,b)=>a.dias-b.dias);
+
+  const semRetorno = linhas.filter(x=>x.semRetorno);
+  const ativos = linhas.filter(x=>!x.semRetorno);
+  const fila = ativos.filter(x=>!x.aguardandoRetorno);
+  const aguardando = ativos.filter(x=>x.aguardandoRetorno);
+  const vencidas = fila.filter(x=>x.dias < 0);
+  const proximas = fila.filter(x=>x.dias >= 0);
+
+  document.getElementById('statVencidas').textContent = vencidas.length;
+  document.getElementById('statProximas').textContent = proximas.length;
+  document.getElementById('statClientes').textContent = data.clientes.length;
+  document.getElementById('statVeiculos').textContent = data.veiculos.length;
+
+  const wrap = document.getElementById('tagsWrap');
+  if(linhas.length===0){
+    wrap.innerHTML = `<div class="empty-note">Nenhuma revisão vencida ou próxima nos próximos 30 dias.</div>`;
+    return;
+  }
+  let html = '';
+  if(fila.length>0){ html += fila.map(({v,cliente,dias})=>tagCardHtml(v,cliente,dias,{contatado:false})).join(''); }
+  else if(aguardando.length===0 && semRetorno.length===0){ html += `<div class="empty-note">Nenhum cliente pendente de aviso agora.</div>`; }
+  else { html += `<div class="empty-note">Nenhum cliente pendente de aviso agora.</div>`; }
+  if(aguardando.length>0){
+    html += `<div class="queue-group-label">Aguardando retorno (avisado há menos de ${DIAS_AGUARDANDO_RETORNO} dias)</div>`;
+    html += aguardando.map(({v,cliente,dias,diasContato})=>tagCardHtml(v,cliente,dias,{contatado:true,diasContato})).join('');
+  }
+  if(semRetorno.length>0){
+    html += `<div class="queue-group-label">Sem retorno (${LIMITE_AVISOS} avisos enviados, sem resposta)</div>`;
+    html += semRetorno.map(({v,cliente,dias})=>tagCardHtml(v,cliente,dias,{semRetorno:true})).join('');
+  }
+  wrap.innerHTML = html;
+}
+
+function renderClientes(){
+  const body = document.getElementById('clientesBody');
+  if(data.clientes.length===0){ body.innerHTML = `<tr><td colspan="4" class="empty-note">Nenhum cliente cadastrado ainda.</td></tr>`; return; }
+  body.innerHTML = data.clientes.map(c=>{
+    const nVeiculos = data.veiculos.filter(v=>v.cliente_id===c.id).length;
+    return `<tr><td>${escapeHtml(c.nome)}</td><td class="mono">${escapeHtml(c.telefone||'—')}</td>
+      <td><span class="tag-pill">${nVeiculos} veículo${nVeiculos===1?'':'s'}</span></td>
+      <td><div class="row-actions"><button class="btn btn-ghost btn-sm" onclick="editCliente('${c.id}')">Editar</button><button class="btn btn-ghost btn-sm" onclick="excluirCliente('${c.id}')">Excluir</button></div></td></tr>`;
+  }).join('');
+}
+
+function renderVeiculos(){
+  const body = document.getElementById('veiculosBody');
+  if(data.veiculos.length===0){ body.innerHTML = `<tr><td colspan="5" class="empty-note">Nenhum veículo cadastrado ainda.</td></tr>`; return; }
+  body.innerHTML = data.veiculos.map(v=>{
+    const cliente = data.clientes.find(c=>c.id===v.cliente_id);
+    const dias = diasAte(v.proxima_revisao);
+    let revisaoLabel = '—';
+    if(v.proxima_revisao){
+      const d = new Date(v.proxima_revisao+'T00:00:00');
+      revisaoLabel = d.toLocaleDateString('pt-BR');
+      if(dias<0) revisaoLabel += ` (vencida)`;
+    }
+    return `<tr><td class="mono">${escapeHtml(v.placa)}</td><td>${escapeHtml(v.modelo)}</td>
+      <td>${cliente ? escapeHtml(cliente.nome) : '<span class="tag-pill">sem cliente</span>'}</td><td>${revisaoLabel}</td>
+      <td><div class="row-actions"><button class="btn btn-ghost btn-sm" onclick="editVeiculo('${v.id}')">Editar</button><button class="btn btn-ghost btn-sm" onclick="excluirVeiculo('${v.id}')">Excluir</button></div></td></tr>`;
+  }).join('');
+}
+
+function renderPecas(){
+  const body = document.getElementById('pecasBody');
+  if(data.pecas.length===0){ body.innerHTML = `<tr><td colspan="4" class="empty-note">Nenhuma peça cadastrada ainda.</td></tr>`; return; }
+  body.innerHTML = data.pecas.map(p=>{
+    const baixo = p.qtd <= p.estoque_minimo;
+    return `<tr><td>${escapeHtml(p.nome)}</td><td class="${baixo?'low-stock':''}">${p.qtd}${baixo ? ' · estoque baixo' : ''}</td>
+      <td class="mono">R$ ${Number(p.preco).toFixed(2)}</td>
+      <td><div class="row-actions"><button class="btn btn-ghost btn-sm" onclick="editPeca('${p.id}')">Editar</button><button class="btn btn-ghost btn-sm" onclick="excluirPeca('${p.id}')">Excluir</button></div></td></tr>`;
+  }).join('');
+}
+
+checkSessaoExistente();
+</script>
 </body>
 </html>
