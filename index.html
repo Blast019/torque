@@ -40,6 +40,7 @@
     <button class="nav-item" data-tab="clientes"><span class="nav-icon">☰</span><span class="nav-label">Clientes</span></button>
     <button class="nav-item" data-tab="veiculos"><span class="nav-icon">▤</span><span class="nav-label">Veículos</span></button>
     <button class="nav-item" data-tab="pecas"><span class="nav-icon">⚙</span><span class="nav-label">Peças</span></button>
+    <button class="nav-item" data-tab="fornecedores"><span class="nav-icon">☏</span><span class="nav-label">Fornecedores</span></button>
     <div class="sidebar-foot">
       <div class="company-pill"><div class="company-dot"></div><span id="empresaNomeLabel">—</span></div>
       <button class="logout-btn" id="logoutBtn">Sair da conta</button>
@@ -82,7 +83,14 @@
 
       <div class="tab-panel hidden" id="tab-pecas">
         <div class="topbar"><div><h1>Peças</h1><p>Estoque de peças e insumos</p></div><button class="btn btn-primary" id="btnNovaPeca">+ Nova peça</button></div>
-        <div class="table-wrap"><table><thead><tr><th>Peça</th><th>Qtd. em estoque</th><th>Preço venda</th><th></th></tr></thead><tbody id="pecasBody"></tbody></table></div>
+        <div class="field search-field"><input type="text" id="buscaPecas" placeholder="Buscar por nome da peça..."></div>
+        <div class="table-wrap"><table><thead><tr><th>Peça</th><th>Qtd. em estoque</th><th>Fornecedor</th><th>Preço venda</th><th></th></tr></thead><tbody id="pecasBody"></tbody></table></div>
+      </div>
+
+      <div class="tab-panel hidden" id="tab-fornecedores">
+        <div class="topbar"><div><h1>Fornecedores</h1><p>Contatos para reposição de peças</p></div><button class="btn btn-primary" id="btnNovoFornecedor">+ Novo fornecedor</button></div>
+        <div class="field search-field"><input type="text" id="buscaFornecedores" placeholder="Buscar por nome ou telefone..."></div>
+        <div class="table-wrap"><table><thead><tr><th>Nome</th><th>Telefone</th><th>Peças</th><th></th></tr></thead><tbody id="fornecedoresBody"></tbody></table></div>
       </div>
     </div>
   </div>
@@ -114,7 +122,16 @@
   <div class="field"><label>Quantidade em estoque</label><input type="number" id="pecaQtd" placeholder="0"></div>
   <div class="field"><label>Estoque mínimo (alerta)</label><input type="number" id="pecaMin" placeholder="0"></div>
   <div class="field"><label>Preço de venda (R$)</label><input type="number" step="0.01" id="pecaPreco" placeholder="0.00"></div>
+  <div class="field"><label>Fornecedor (opcional)</label><select id="pecaFornecedor"><option value="">Nenhum</option></select></div>
   <div class="modal-actions"><button class="btn" onclick="closeModal('overlayPeca')">Cancelar</button><button class="btn btn-primary" id="salvarPecaBtn">Salvar</button></div>
+</div></div>
+
+<div class="overlay" id="overlayFornecedor"><div class="modal">
+  <h3 id="modalFornecedorTitle">Novo fornecedor</h3>
+  <input type="hidden" id="fornecedorId">
+  <div class="field"><label>Nome</label><input id="fornecedorNome" placeholder="Nome do fornecedor"></div>
+  <div class="field"><label>Telefone (WhatsApp, com DDD)</label><input id="fornecedorTelefone" placeholder="11 91234-5678"></div>
+  <div class="modal-actions"><button class="btn" onclick="closeModal('overlayFornecedor')">Cancelar</button><button class="btn btn-primary" id="salvarFornecedorBtn">Salvar</button></div>
 </div></div>
 
 <div class="overlay" id="overlayAgendamento"><div class="modal">
