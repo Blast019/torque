@@ -1,0 +1,14 @@
+TORQUE — arquivos separados
+
+Arquivos:
+- index.html: estrutura da aplicação
+- style.css: estilos
+- config.js: URL e chave anon do Supabase
+- script.js: lógica da aplicação
+
+Observação:
+O arquivo original trazia a URL terminando em /rest/v1/, mas createClient() usa a URL base
+do projeto Supabase. O config.js já foi ajustado para a URL base.
+
+Para funcionar, o projeto Supabase também precisa ter as tabelas/políticas esperadas pelo
+código (empresas, clientes, veiculos e pecas).
