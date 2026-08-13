@@ -595,20 +595,24 @@ document.getElementById('salvarOSBtn').addEventListener('click', async ()=>{
 
   let osId = id;
   if(id){
-    await sb.from('ordens_servico').update({ cliente_id, veiculo_id, descricao, mao_de_obra, garantia_maodeobra_dias, garantia_pecas_dias }).eq('id', id);
-    await sb.from('os_itens').delete().eq('os_id', id);
+    const { error: errUpdate } = await sb.from('ordens_servico').update({ cliente_id, veiculo_id, descricao, mao_de_obra, garantia_maodeobra_dias, garantia_pecas_dias }).eq('id', id);
+    if(errUpdate){ alert('Erro ao salvar OS: ' + errUpdate.message); return; }
+    const { error: errDelItens } = await sb.from('os_itens').delete().eq('os_id', id);
+    if(errDelItens){ alert('Erro ao atualizar itens da OS: ' + errDelItens.message); return; }
   } else {
-    const { data: novaOS } = await sb.from('ordens_servico').insert({
+    const { data: novaOS, error: errInsert } = await sb.from('ordens_servico').insert({
       empresa_id: empresaId, cliente_id, veiculo_id, descricao, mao_de_obra,
       garantia_maodeobra_dias, garantia_pecas_dias, status: 'aberta', pago: false
     }).select();
+    if(errInsert){ alert('Erro ao criar OS: ' + errInsert.message); return; }
     osId = novaOS && novaOS[0] ? novaOS[0].id : null;
   }
   if(osId && osItensAtual.length > 0){
-    await sb.from('os_itens').insert(osItensAtual.map(it=>({
+    const { error: errItens } = await sb.from('os_itens').insert(osItensAtual.map(it=>({
       os_id: osId, peca_id: it.peca_id, nome_peca: it.nome, quantidade: it.quantidade,
       preco_unitario: it.preco_unitario, custo_unitario: it.custo_unitario
     })));
+    if(errItens){ alert('Erro ao salvar peças da OS: ' + errItens.message); return; }
   }
   closeModal('overlayOS');
   await carregarDados();
@@ -631,12 +635,14 @@ async function marcarOSPaga(id){
   const cliente = data.clientes.find(c=>c.id===os.cliente_id);
   const total = totalOS(os);
   const hoje = new Date().toISOString().slice(0,10);
-  await sb.from('ordens_servico').update({ pago: true, pago_em: hoje, status: 'concluida' }).eq('id', id);
-  await sb.from('movimentos_caixa').insert({
+  const { error: errPago } = await sb.from('ordens_servico').update({ pago: true, pago_em: hoje, status: 'concluida' }).eq('id', id);
+  if(errPago){ alert('Erro ao marcar OS como paga: ' + errPago.message); return; }
+  const { error: errMov } = await sb.from('movimentos_caixa').insert({
     empresa_id: empresaId, tipo: 'entrada', categoria: 'os',
     descricao: `Pagamento OS — ${cliente ? cliente.nome : 'cliente'}`,
     valor: total, os_id: id, data: hoje
   });
+  if(errMov){ alert('Erro ao lançar no caixa: ' + errMov.message); return; }
   await carregarDados();
 }
 
@@ -729,7 +735,8 @@ document.getElementById('salvarDespesaBtn').addEventListener('click', async ()=>
   const valor = parseFloat(document.getElementById('despesaValor').value) || 0;
   const dataDespesa = document.getElementById('despesaData').value || new Date().toISOString().slice(0,10);
   if(valor <= 0){ alert('Informe um valor maior que zero.'); return; }
-  await sb.from('movimentos_caixa').insert({ empresa_id: empresaId, tipo: 'saida', categoria, descricao, valor, data: dataDespesa });
+  const { error } = await sb.from('movimentos_caixa').insert({ empresa_id: empresaId, tipo: 'saida', categoria, descricao, valor, data: dataDespesa });
+  if(error){ alert('Erro ao salvar despesa: ' + error.message); return; }
   closeModal('overlayDespesa');
   await carregarDados();
 });
@@ -847,12 +854,14 @@ document.getElementById('salvarReporBtn').addEventListener('click', async ()=>{
   const custoUnitario = parseFloat(document.getElementById('reporCusto').value) || 0;
   if(qtdAdicionar <= 0){ alert('Informe uma quantidade maior que zero.'); return; }
   const novaQtd = (p.qtd || 0) + qtdAdicionar;
-  await sb.from('pecas').update({ qtd: novaQtd, custo: custoUnitario }).eq('id', id);
-  await sb.from('movimentos_caixa').insert({
+  const { error: errQtd } = await sb.from('pecas').update({ qtd: novaQtd, custo: custoUnitario }).eq('id', id);
+  if(errQtd){ alert('Erro ao atualizar estoque: ' + errQtd.message); return; }
+  const { error: errMov } = await sb.from('movimentos_caixa').insert({
     empresa_id: empresaId, tipo: 'saida', categoria: 'estoque',
     descricao: `Reposição de estoque: ${p.nome} x${qtdAdicionar}`,
     valor: qtdAdicionar * custoUnitario, peca_id: id, data: new Date().toISOString().slice(0,10)
   });
+  if(errMov){ alert('Erro ao lançar despesa da reposição: ' + errMov.message); return; }
   closeModal('overlayReporEstoque');
   await carregarDados();
 });
