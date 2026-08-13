@@ -3,13 +3,18 @@ const DIAS_AGUARDANDO_RETORNO = 5;
 const LIMITE_AVISOS = 3;
 
 let empresaId = null;
-let data = { clientes: [], veiculos: [], pecas: [], agendamentos: [], fornecedores: [] };
+let data = { clientes: [], veiculos: [], pecas: [], agendamentos: [], fornecedores: [], os: [], osItens: [], movimentos: [] };
 let modoCadastro = false;
 let filtroClientes = '';
 let filtroVeiculos = '';
 let filtroAgendamentos = '';
+let filtroStatusAgendamento = '';
 let filtroPecas = '';
 let filtroFornecedores = '';
+let filtroOS = '';
+let filtroStatusOS = '';
+let filtroPagoOS = '';
+let osItensAtual = [];
 
 // ---------------- AUTH ----------------
 document.getElementById('authToggleLink').addEventListener('click', ()=>{
@@ -93,18 +98,25 @@ async function carregarDados(){
   document.getElementById('loadingState').classList.remove('hidden');
   document.getElementById('appContent').classList.add('hidden');
 
-  const [{ data: clientes }, { data: veiculos }, { data: pecas }, { data: agendamentos }, { data: fornecedores }] = await Promise.all([
+  const [{ data: clientes }, { data: veiculos }, { data: pecas }, { data: agendamentos }, { data: fornecedores }, { data: os }, { data: osItens }, { data: movimentos }] = await Promise.all([
     sb.from('clientes').select('*').eq('empresa_id', empresaId).order('nome'),
     sb.from('veiculos').select('*').eq('empresa_id', empresaId),
     sb.from('pecas').select('*').eq('empresa_id', empresaId).order('nome'),
     sb.from('agendamentos').select('*').eq('empresa_id', empresaId).order('data_agendamento'),
     sb.from('fornecedores').select('*').eq('empresa_id', empresaId).order('nome'),
+    sb.from('ordens_servico').select('*').eq('empresa_id', empresaId).order('data', { ascending: false }),
+    sb.from('os_itens').select('*'),
+    sb.from('movimentos_caixa').select('*').eq('empresa_id', empresaId).order('data', { ascending: false }),
   ]);
   data.clientes = clientes || [];
   data.veiculos = veiculos || [];
   data.pecas = pecas || [];
   data.agendamentos = agendamentos || [];
   data.fornecedores = fornecedores || [];
+  data.os = os || [];
+  const osIds = new Set(data.os.map(o=>o.id));
+  data.osItens = (osItens || []).filter(it=>osIds.has(it.os_id));
+  data.movimentos = movimentos || [];
 
   document.getElementById('loadingState').classList.add('hidden');
   document.getElementById('appContent').classList.remove('hidden');
@@ -126,8 +138,12 @@ function openModal(id){ document.getElementById(id).classList.add('show'); }
 document.getElementById('buscaClientes').addEventListener('input', (e)=>{ filtroClientes = e.target.value.trim().toLowerCase(); renderClientes(); });
 document.getElementById('buscaVeiculos').addEventListener('input', (e)=>{ filtroVeiculos = e.target.value.trim().toLowerCase(); renderVeiculos(); });
 document.getElementById('buscaAgendamentos').addEventListener('input', (e)=>{ filtroAgendamentos = e.target.value.trim().toLowerCase(); renderAgendamentos(); });
+document.getElementById('filtroStatusAgendamentoSelect').addEventListener('change', (e)=>{ filtroStatusAgendamento = e.target.value; renderAgendamentos(); });
 document.getElementById('buscaPecas').addEventListener('input', (e)=>{ filtroPecas = e.target.value.trim().toLowerCase(); renderPecas(); });
 document.getElementById('buscaFornecedores').addEventListener('input', (e)=>{ filtroFornecedores = e.target.value.trim().toLowerCase(); renderFornecedores(); });
+document.getElementById('buscaOS').addEventListener('input', (e)=>{ filtroOS = e.target.value.trim().toLowerCase(); renderOS(); });
+document.getElementById('filtroStatusOSSelect').addEventListener('change', (e)=>{ filtroStatusOS = e.target.value; renderOS(); });
+document.getElementById('filtroPagoOSSelect').addEventListener('change', (e)=>{ filtroPagoOS = e.target.value; renderOS(); });
 
 // ---------------- CLIENTES ----------------
 document.getElementById('btnNovoCliente').addEventListener('click', ()=>{
@@ -359,6 +375,9 @@ function renderAgendamentos(){
   const body = document.getElementById('agendamentosBody');
   const termo = filtroAgendamentos;
   let lista = [...data.agendamentos].sort((a,b)=>(a.data_agendamento||'').localeCompare(b.data_agendamento||''));
+  if(filtroStatusAgendamento){
+    lista = lista.filter(a=>a.status === filtroStatusAgendamento);
+  }
   if(termo){
     lista = lista.filter(a=>{
       const cliente = data.clientes.find(c=>c.id===a.cliente_id);
@@ -392,6 +411,367 @@ function renderAgendamentos(){
   }).join('');
 }
 
+// ---------------- ORDENS DE SERVICO ----------------
+document.getElementById('btnNovaOS').addEventListener('click', ()=>{
+  abrirModalOS();
+});
+
+function abrirModalOS(clienteId, veiculoId){
+  document.getElementById('modalOSTitle').textContent = 'Nova ordem de serviço';
+  document.getElementById('osId').value = '';
+  document.getElementById('osClienteId').value = '';
+  document.getElementById('osDescricao').value = '';
+  document.getElementById('osMaoDeObra').value = '';
+  document.getElementById('osGarantiaMaoDeObra').value = '';
+  document.getElementById('osGarantiaPecas').value = '';
+  document.getElementById('osBuscaPeca').value = '';
+  document.getElementById('osItemPecaId').value = '';
+  document.getElementById('osItemQtd').value = 1;
+  document.getElementById('osItemPreco').value = '';
+  document.getElementById('osSugestoes').classList.add('hidden');
+  document.getElementById('osPecaSugestoes').classList.add('hidden');
+  osItensAtual = [];
+  renderOSItensLista();
+  if(clienteId){
+    selecionarClienteOS(clienteId);
+    if(veiculoId) document.getElementById('osVeiculo').value = veiculoId;
+  } else {
+    document.getElementById('osBuscaCliente').value = '';
+    document.getElementById('osVeiculo').innerHTML = '<option value="">Busque um cliente primeiro</option>';
+  }
+  openModal('overlayOS');
+}
+
+document.getElementById('osBuscaCliente').addEventListener('input', (e)=>{
+  const termo = e.target.value.trim().toLowerCase();
+  document.getElementById('osClienteId').value = '';
+  document.getElementById('osVeiculo').innerHTML = '<option value="">Busque um cliente primeiro</option>';
+  const sugestoesEl = document.getElementById('osSugestoes');
+  if(!termo){ sugestoesEl.classList.add('hidden'); sugestoesEl.innerHTML = ''; return; }
+  const resultados = data.clientes.filter(c=>{
+    const veiculosCliente = data.veiculos.filter(v=>v.cliente_id===c.id);
+    const placas = veiculosCliente.map(v=>(v.placa||'').toLowerCase()).join(' ');
+    return c.nome.toLowerCase().includes(termo) || (c.telefone||'').toLowerCase().includes(termo) || placas.includes(termo);
+  }).slice(0,8);
+  if(resultados.length===0){
+    sugestoesEl.innerHTML = `<div class="autocomplete-empty">Nenhum cliente encontrado</div>`;
+    sugestoesEl.classList.remove('hidden');
+    return;
+  }
+  sugestoesEl.innerHTML = resultados.map(c=>{
+    const nVeiculos = data.veiculos.filter(v=>v.cliente_id===c.id).length;
+    return `<div class="autocomplete-item" onclick="selecionarClienteOS('${c.id}')">
+      <div class="ac-nome">${escapeHtml(c.nome)}</div>
+      <div class="ac-sub">${escapeHtml(c.telefone||'sem telefone')} · ${nVeiculos} veículo${nVeiculos===1?'':'s'}</div>
+    </div>`;
+  }).join('');
+  sugestoesEl.classList.remove('hidden');
+});
+
+function selecionarClienteOS(clienteId){
+  const c = data.clientes.find(x=>x.id===clienteId);
+  if(!c) return;
+  document.getElementById('osClienteId').value = c.id;
+  document.getElementById('osBuscaCliente').value = c.nome;
+  document.getElementById('osSugestoes').classList.add('hidden');
+  const veiculosCliente = data.veiculos.filter(v=>v.cliente_id===c.id);
+  const sel = document.getElementById('osVeiculo');
+  sel.innerHTML = veiculosCliente.length===0
+    ? '<option value="">Cliente sem veículo cadastrado</option>'
+    : veiculosCliente.map(v=>`<option value="${v.id}">${escapeHtml(v.placa)} — ${escapeHtml(v.modelo)}</option>`).join('');
+}
+
+document.getElementById('osBuscaPeca').addEventListener('input', (e)=>{
+  const termo = e.target.value.trim().toLowerCase();
+  document.getElementById('osItemPecaId').value = '';
+  const sugestoesEl = document.getElementById('osPecaSugestoes');
+  if(!termo){ sugestoesEl.classList.add('hidden'); sugestoesEl.innerHTML = ''; return; }
+  const resultados = data.pecas.filter(p=>p.nome.toLowerCase().includes(termo)).slice(0,8);
+  if(resultados.length===0){
+    sugestoesEl.innerHTML = `<div class="autocomplete-empty">Nenhuma peça encontrada</div>`;
+    sugestoesEl.classList.remove('hidden');
+    return;
+  }
+  sugestoesEl.innerHTML = resultados.map(p=>`<div class="autocomplete-item" onclick="selecionarPecaOS('${p.id}')">
+      <div class="ac-nome">${escapeHtml(p.nome)}</div>
+      <div class="ac-sub">Estoque: ${p.qtd} · Venda: R$ ${Number(p.preco).toFixed(2)}</div>
+    </div>`).join('');
+  sugestoesEl.classList.remove('hidden');
+});
+
+function selecionarPecaOS(pecaId){
+  const p = data.pecas.find(x=>x.id===pecaId);
+  if(!p) return;
+  document.getElementById('osItemPecaId').value = p.id;
+  document.getElementById('osBuscaPeca').value = p.nome;
+  document.getElementById('osPecaSugestoes').classList.add('hidden');
+  const fornecedor = data.fornecedores.find(f=>f.id===p.fornecedor_id);
+  const semMargem = fornecedor && fornecedor.ganha_margem === false;
+  const sugestao = semMargem ? (p.custo || 0) : p.preco;
+  document.getElementById('osItemPreco').value = Number(sugestao).toFixed(2);
+}
+
+document.getElementById('btnAdicionarItemOS').addEventListener('click', ()=>{
+  const pecaId = document.getElementById('osItemPecaId').value;
+  if(!pecaId){ alert('Busque e selecione uma peça.'); return; }
+  const p = data.pecas.find(x=>x.id===pecaId);
+  if(!p) return;
+  const quantidade = parseInt(document.getElementById('osItemQtd').value) || 0;
+  const preco_unitario = parseFloat(document.getElementById('osItemPreco').value) || 0;
+  if(quantidade <= 0){ alert('Informe uma quantidade válida.'); return; }
+  osItensAtual.push({ peca_id: p.id, nome: p.nome, quantidade, preco_unitario, custo_unitario: p.custo || 0 });
+  document.getElementById('osBuscaPeca').value = '';
+  document.getElementById('osItemPecaId').value = '';
+  document.getElementById('osItemQtd').value = 1;
+  document.getElementById('osItemPreco').value = '';
+  renderOSItensLista();
+  atualizarOSTotalPreview();
+});
+
+function removerItemOS(index){
+  osItensAtual.splice(index, 1);
+  renderOSItensLista();
+  atualizarOSTotalPreview();
+}
+
+function renderOSItensLista(){
+  const wrap = document.getElementById('osItensLista');
+  if(osItensAtual.length===0){ wrap.innerHTML = `<div class="empty-note" style="padding:6px 2px;">Nenhuma peça adicionada.</div>`; return; }
+  wrap.innerHTML = osItensAtual.map((it,i)=>{
+    const subtotal = it.quantidade * it.preco_unitario;
+    return `<div class="os-item-row"><span>${escapeHtml(it.nome)} — ${it.quantidade}x R$ ${it.preco_unitario.toFixed(2)} = R$ ${subtotal.toFixed(2)}</span><button type="button" class="os-item-remove" onclick="removerItemOS(${i})">remover</button></div>`;
+  }).join('');
+}
+
+function atualizarOSTotalPreview(){
+  const maoDeObra = parseFloat(document.getElementById('osMaoDeObra').value) || 0;
+  const totalPecas = osItensAtual.reduce((s,it)=>s+it.quantidade*it.preco_unitario, 0);
+  document.getElementById('osTotalPreview').textContent = formatBRL(maoDeObra + totalPecas);
+}
+document.getElementById('osMaoDeObra').addEventListener('input', atualizarOSTotalPreview);
+
+document.addEventListener('click', (e)=>{
+  const campoCliente = document.getElementById('osBuscaCliente');
+  const sugCliente = document.getElementById('osSugestoes');
+  if(campoCliente && sugCliente && !campoCliente.contains(e.target) && !sugCliente.contains(e.target)){
+    sugCliente.classList.add('hidden');
+  }
+  const campoPeca = document.getElementById('osBuscaPeca');
+  const sugPeca = document.getElementById('osPecaSugestoes');
+  if(campoPeca && sugPeca && !campoPeca.contains(e.target) && !sugPeca.contains(e.target)){
+    sugPeca.classList.add('hidden');
+  }
+});
+
+function editOS(id){
+  const os = data.os.find(x=>x.id===id);
+  if(!os) return;
+  document.getElementById('modalOSTitle').textContent = 'Editar ordem de serviço';
+  document.getElementById('osId').value = os.id;
+  document.getElementById('osDescricao').value = os.descricao || '';
+  document.getElementById('osMaoDeObra').value = os.mao_de_obra || '';
+  document.getElementById('osGarantiaMaoDeObra').value = os.garantia_maodeobra_dias || '';
+  document.getElementById('osGarantiaPecas').value = os.garantia_pecas_dias || '';
+  selecionarClienteOS(os.cliente_id);
+  if(os.veiculo_id) document.getElementById('osVeiculo').value = os.veiculo_id;
+  osItensAtual = data.osItens.filter(it=>it.os_id===os.id).map(it=>({
+    peca_id: it.peca_id, nome: it.nome_peca, quantidade: it.quantidade,
+    preco_unitario: Number(it.preco_unitario), custo_unitario: Number(it.custo_unitario)
+  }));
+  renderOSItensLista();
+  atualizarOSTotalPreview();
+  openModal('overlayOS');
+}
+
+document.getElementById('salvarOSBtn').addEventListener('click', async ()=>{
+  const id = document.getElementById('osId').value;
+  const cliente_id = document.getElementById('osClienteId').value;
+  const veiculo_id = document.getElementById('osVeiculo').value || null;
+  const descricao = document.getElementById('osDescricao').value.trim();
+  const mao_de_obra = parseFloat(document.getElementById('osMaoDeObra').value) || 0;
+  const garantia_maodeobra_dias = parseInt(document.getElementById('osGarantiaMaoDeObra').value) || null;
+  const garantia_pecas_dias = parseInt(document.getElementById('osGarantiaPecas').value) || null;
+  if(!cliente_id){ alert('Busque e selecione um cliente.'); return; }
+
+  let osId = id;
+  if(id){
+    await sb.from('ordens_servico').update({ cliente_id, veiculo_id, descricao, mao_de_obra, garantia_maodeobra_dias, garantia_pecas_dias }).eq('id', id);
+    await sb.from('os_itens').delete().eq('os_id', id);
+  } else {
+    const { data: novaOS } = await sb.from('ordens_servico').insert({
+      empresa_id: empresaId, cliente_id, veiculo_id, descricao, mao_de_obra,
+      garantia_maodeobra_dias, garantia_pecas_dias, status: 'aberta', pago: false
+    }).select();
+    osId = novaOS && novaOS[0] ? novaOS[0].id : null;
+  }
+  if(osId && osItensAtual.length > 0){
+    await sb.from('os_itens').insert(osItensAtual.map(it=>({
+      os_id: osId, peca_id: it.peca_id, nome_peca: it.nome, quantidade: it.quantidade,
+      preco_unitario: it.preco_unitario, custo_unitario: it.custo_unitario
+    })));
+  }
+  closeModal('overlayOS');
+  await carregarDados();
+});
+
+function totalOS(os){
+  const itens = data.osItens.filter(it=>it.os_id===os.id);
+  const totalPecas = itens.reduce((s,it)=>s+it.quantidade*Number(it.preco_unitario), 0);
+  return Number(os.mao_de_obra || 0) + totalPecas;
+}
+
+async function marcarOSConcluida(id){
+  await sb.from('ordens_servico').update({ status: 'concluida' }).eq('id', id);
+  await carregarDados();
+}
+
+async function marcarOSPaga(id){
+  const os = data.os.find(x=>x.id===id);
+  if(!os || os.pago) return;
+  const cliente = data.clientes.find(c=>c.id===os.cliente_id);
+  const total = totalOS(os);
+  const hoje = new Date().toISOString().slice(0,10);
+  await sb.from('ordens_servico').update({ pago: true, pago_em: hoje, status: 'concluida' }).eq('id', id);
+  await sb.from('movimentos_caixa').insert({
+    empresa_id: empresaId, tipo: 'entrada', categoria: 'os',
+    descricao: `Pagamento OS — ${cliente ? cliente.nome : 'cliente'}`,
+    valor: total, os_id: id, data: hoje
+  });
+  await carregarDados();
+}
+
+async function excluirOS(id){
+  if(!confirm('Excluir esta ordem de serviço? Isso também remove os lançamentos financeiros ligados a ela.')) return;
+  await sb.from('movimentos_caixa').delete().eq('os_id', id);
+  await sb.from('ordens_servico').delete().eq('id', id);
+  await carregarDados();
+}
+
+function enviarOSWhatsapp(id){
+  const os = data.os.find(x=>x.id===id);
+  if(!os) return;
+  const cliente = data.clientes.find(c=>c.id===os.cliente_id);
+  if(!cliente || !cliente.telefone){ alert('Este cliente não tem telefone cadastrado.'); return; }
+  const veiculo = data.veiculos.find(v=>v.id===os.veiculo_id);
+  const itens = data.osItens.filter(it=>it.os_id===os.id);
+  const total = totalOS(os);
+  let msg = `Olá, ${cliente.nome.split(' ')[0]}! Aqui é da oficina.\n\nSegue o resumo da Ordem de Serviço`;
+  msg += veiculo ? ` do seu ${veiculo.modelo} (placa ${veiculo.placa}):\n\n` : `:\n\n`;
+  if(os.descricao) msg += `Serviço: ${os.descricao}\n\n`;
+  if(itens.length > 0){
+    msg += `Peças utilizadas:\n`;
+    itens.forEach(it=>{ msg += `- ${it.nome_peca} x${it.quantidade} — R$ ${Number(it.preco_unitario).toFixed(2)}\n`; });
+    msg += `\n`;
+  }
+  msg += `Mão de obra: R$ ${Number(os.mao_de_obra||0).toFixed(2)}\nTotal: R$ ${total.toFixed(2)}\n\n`;
+  if(os.garantia_maodeobra_dias || os.garantia_pecas_dias){
+    msg += `Garantia: `;
+    if(os.garantia_maodeobra_dias) msg += `${os.garantia_maodeobra_dias} dias na mão de obra`;
+    if(os.garantia_maodeobra_dias && os.garantia_pecas_dias) msg += ` e `;
+    if(os.garantia_pecas_dias) msg += `${os.garantia_pecas_dias} dias nas peças`;
+    msg += `.\n\n`;
+  }
+  msg += `Qualquer problema, é só chamar a gente que iremos avaliar!`;
+  window.open(waLink(cliente.telefone, msg), '_blank');
+}
+
+function renderOS(){
+  const body = document.getElementById('osBody');
+  const termo = filtroOS;
+  let lista = [...data.os];
+  if(filtroStatusOS) lista = lista.filter(o=>o.status === filtroStatusOS);
+  if(filtroPagoOS) lista = lista.filter(o=> filtroPagoOS === 'pago' ? o.pago : !o.pago);
+  if(termo){
+    lista = lista.filter(o=>{
+      const cliente = data.clientes.find(c=>c.id===o.cliente_id);
+      const veiculo = data.veiculos.find(v=>v.id===o.veiculo_id);
+      return (cliente ? cliente.nome.toLowerCase().includes(termo) : false)
+        || (veiculo ? (veiculo.placa||'').toLowerCase().includes(termo) : false)
+        || (o.descricao||'').toLowerCase().includes(termo);
+    });
+  }
+  if(lista.length===0){ body.innerHTML = `<tr><td colspan="7" class="empty-note">${termo || filtroStatusOS || filtroPagoOS ? 'Nenhuma OS encontrada.' : 'Nenhuma ordem de serviço cadastrada ainda.'}</td></tr>`; return; }
+  body.innerHTML = lista.map(o=>{
+    const cliente = data.clientes.find(c=>c.id===o.cliente_id);
+    const veiculo = data.veiculos.find(v=>v.id===o.veiculo_id);
+    const total = totalOS(o);
+    const concluida = o.status === 'concluida';
+    const descricaoResumo = o.descricao ? (o.descricao.length > 40 ? o.descricao.slice(0,40)+'…' : o.descricao) : '—';
+    return `<tr>
+      <td>${cliente ? escapeHtml(cliente.nome) : '—'}</td>
+      <td>${veiculo ? escapeHtml(veiculo.placa) : '<span class="tag-pill">sem veículo</span>'}</td>
+      <td>${escapeHtml(descricaoResumo)}</td>
+      <td class="mono">R$ ${total.toFixed(2)}</td>
+      <td><span class="tag-pill">${concluida ? 'Concluída' : 'Aberta'}</span></td>
+      <td><span class="tag-pill">${o.pago ? 'Pago' : 'Pendente'}</span></td>
+      <td><div class="row-actions">
+        <button class="btn btn-ghost btn-sm" onclick="enviarOSWhatsapp('${o.id}')">WhatsApp</button>
+        ${concluida ? '' : `<button class="btn btn-ghost btn-sm" onclick="marcarOSConcluida('${o.id}')">Concluir</button>`}
+        ${o.pago ? '' : `<button class="btn btn-ghost btn-sm" onclick="marcarOSPaga('${o.id}')">Marcar paga</button>`}
+        <button class="btn btn-ghost btn-sm" onclick="editOS('${o.id}')">Editar</button>
+        <button class="btn btn-ghost btn-sm" onclick="excluirOS('${o.id}')">Excluir</button>
+      </div></td></tr>`;
+  }).join('');
+}
+
+// ---------------- FINANCEIRO ----------------
+document.getElementById('btnNovaDespesa').addEventListener('click', ()=>{
+  document.getElementById('despesaCategoria').value = 'aluguel';
+  document.getElementById('despesaDescricao').value = '';
+  document.getElementById('despesaValor').value = '';
+  document.getElementById('despesaData').value = new Date().toISOString().slice(0,10);
+  openModal('overlayDespesa');
+});
+
+document.getElementById('salvarDespesaBtn').addEventListener('click', async ()=>{
+  const categoria = document.getElementById('despesaCategoria').value;
+  const descricao = document.getElementById('despesaDescricao').value.trim();
+  const valor = parseFloat(document.getElementById('despesaValor').value) || 0;
+  const dataDespesa = document.getElementById('despesaData').value || new Date().toISOString().slice(0,10);
+  if(valor <= 0){ alert('Informe um valor maior que zero.'); return; }
+  await sb.from('movimentos_caixa').insert({ empresa_id: empresaId, tipo: 'saida', categoria, descricao, valor, data: dataDespesa });
+  closeModal('overlayDespesa');
+  await carregarDados();
+});
+
+async function excluirMovimento(id){
+  if(!confirm('Excluir esta movimentação do caixa?')) return;
+  await sb.from('movimentos_caixa').delete().eq('id', id);
+  await carregarDados();
+}
+
+function categoriaLabel(cat){
+  const labels = { os: 'Ordem de serviço', estoque: 'Reposição de estoque', aluguel: 'Aluguel', energia: 'Energia', agua: 'Água', funcionarios: 'Funcionários', outro: 'Outro' };
+  return labels[cat] || cat;
+}
+
+function renderFinanceiro(){
+  const hoje = new Date();
+  const prefixMes = hoje.toISOString().slice(0,7); // AAAA-MM
+  const doMes = data.movimentos.filter(m=>(m.data||'').startsWith(prefixMes));
+  const faturamento = doMes.filter(m=>m.tipo==='entrada').reduce((s,m)=>s+Number(m.valor||0),0);
+  const despesas = doMes.filter(m=>m.tipo==='saida').reduce((s,m)=>s+Number(m.valor||0),0);
+  const saldo = faturamento - despesas;
+
+  ['statFaturamentoMes','statFaturamentoMes2'].forEach(id=>document.getElementById(id).textContent = formatBRL(faturamento));
+  ['statDespesasMes','statDespesasMes2'].forEach(id=>document.getElementById(id).textContent = formatBRL(despesas));
+  ['statSaldoMes','statSaldoMes2'].forEach(id=>document.getElementById(id).textContent = formatBRL(saldo));
+
+  const body = document.getElementById('movimentosBody');
+  if(data.movimentos.length===0){ body.innerHTML = `<tr><td colspan="6" class="empty-note">Nenhuma movimentação registrada ainda.</td></tr>`; return; }
+  body.innerHTML = data.movimentos.map(m=>{
+    const dataLabel = m.data ? new Date(m.data+'T00:00:00').toLocaleDateString('pt-BR') : '—';
+    const entrada = m.tipo === 'entrada';
+    return `<tr>
+      <td>${dataLabel}</td>
+      <td><span class="tag-pill" style="${entrada ? 'color:var(--ok);' : 'color:var(--accent);'}">${entrada ? 'Entrada' : 'Saída'}</span></td>
+      <td>${categoriaLabel(m.categoria)}</td>
+      <td>${escapeHtml(m.descricao || '—')}</td>
+      <td class="mono" style="${entrada ? 'color:var(--ok);' : 'color:var(--accent);'}">${entrada ? '+' : '−'} R$ ${Number(m.valor).toFixed(2)}</td>
+      <td><div class="row-actions"><button class="btn btn-ghost btn-sm" onclick="excluirMovimento('${m.id}')">Excluir</button></div></td></tr>`;
+  }).join('');
+}
+
 // ---------------- PECAS ----------------
 document.getElementById('btnNovaPeca').addEventListener('click', ()=>{
   document.getElementById('modalPecaTitle').textContent = 'Nova peça';
@@ -399,6 +779,7 @@ document.getElementById('btnNovaPeca').addEventListener('click', ()=>{
   document.getElementById('pecaNome').value = '';
   document.getElementById('pecaQtd').value = '';
   document.getElementById('pecaMin').value = '';
+  document.getElementById('pecaCusto').value = '';
   document.getElementById('pecaPreco').value = '';
   populateFornecedorSelect();
   openModal('overlayPeca');
@@ -418,6 +799,7 @@ function editPeca(id){
   document.getElementById('pecaNome').value = p.nome;
   document.getElementById('pecaQtd').value = p.qtd;
   document.getElementById('pecaMin').value = p.estoque_minimo;
+  document.getElementById('pecaCusto').value = p.custo || 0;
   document.getElementById('pecaPreco').value = p.preco;
   populateFornecedorSelect(p.fornecedor_id);
   openModal('overlayPeca');
@@ -428,13 +810,14 @@ document.getElementById('salvarPecaBtn').addEventListener('click', async ()=>{
   const nome = document.getElementById('pecaNome').value.trim();
   const qtd = parseInt(document.getElementById('pecaQtd').value) || 0;
   const estoque_minimo = parseInt(document.getElementById('pecaMin').value) || 0;
+  const custo = parseFloat(document.getElementById('pecaCusto').value) || 0;
   const preco = parseFloat(document.getElementById('pecaPreco').value) || 0;
   const fornecedor_id = document.getElementById('pecaFornecedor').value || null;
   if(!nome){ alert('Informe o nome da peça.'); return; }
   if(id){
-    await sb.from('pecas').update({ nome, qtd, estoque_minimo, preco, fornecedor_id }).eq('id', id);
+    await sb.from('pecas').update({ nome, qtd, estoque_minimo, custo, preco, fornecedor_id }).eq('id', id);
   } else {
-    await sb.from('pecas').insert({ empresa_id: empresaId, nome, qtd, estoque_minimo, preco, fornecedor_id });
+    await sb.from('pecas').insert({ empresa_id: empresaId, nome, qtd, estoque_minimo, custo, preco, fornecedor_id });
   }
   closeModal('overlayPeca');
   await carregarDados();
@@ -446,12 +829,41 @@ async function excluirPeca(id){
   await carregarDados();
 }
 
+function abrirReporEstoque(id){
+  const p = data.pecas.find(x=>x.id===id);
+  if(!p) return;
+  document.getElementById('reporPecaId').value = p.id;
+  document.getElementById('reporPecaNomeLabel').textContent = `${p.nome} — estoque atual: ${p.qtd}`;
+  document.getElementById('reporQtd').value = '';
+  document.getElementById('reporCusto').value = p.custo || '';
+  openModal('overlayReporEstoque');
+}
+
+document.getElementById('salvarReporBtn').addEventListener('click', async ()=>{
+  const id = document.getElementById('reporPecaId').value;
+  const p = data.pecas.find(x=>x.id===id);
+  if(!p) return;
+  const qtdAdicionar = parseInt(document.getElementById('reporQtd').value) || 0;
+  const custoUnitario = parseFloat(document.getElementById('reporCusto').value) || 0;
+  if(qtdAdicionar <= 0){ alert('Informe uma quantidade maior que zero.'); return; }
+  const novaQtd = (p.qtd || 0) + qtdAdicionar;
+  await sb.from('pecas').update({ qtd: novaQtd, custo: custoUnitario }).eq('id', id);
+  await sb.from('movimentos_caixa').insert({
+    empresa_id: empresaId, tipo: 'saida', categoria: 'estoque',
+    descricao: `Reposição de estoque: ${p.nome} x${qtdAdicionar}`,
+    valor: qtdAdicionar * custoUnitario, peca_id: id, data: new Date().toISOString().slice(0,10)
+  });
+  closeModal('overlayReporEstoque');
+  await carregarDados();
+});
+
 // ---------------- FORNECEDORES ----------------
 document.getElementById('btnNovoFornecedor').addEventListener('click', ()=>{
   document.getElementById('modalFornecedorTitle').textContent = 'Novo fornecedor';
   document.getElementById('fornecedorId').value = '';
   document.getElementById('fornecedorNome').value = '';
   document.getElementById('fornecedorTelefone').value = '';
+  document.getElementById('fornecedorGanhaMargem').checked = true;
   openModal('overlayFornecedor');
 });
 
@@ -462,6 +874,7 @@ function editFornecedor(id){
   document.getElementById('fornecedorId').value = f.id;
   document.getElementById('fornecedorNome').value = f.nome;
   document.getElementById('fornecedorTelefone').value = f.telefone || '';
+  document.getElementById('fornecedorGanhaMargem').checked = f.ganha_margem !== false;
   openModal('overlayFornecedor');
 }
 
@@ -469,11 +882,12 @@ document.getElementById('salvarFornecedorBtn').addEventListener('click', async (
   const id = document.getElementById('fornecedorId').value;
   const nome = document.getElementById('fornecedorNome').value.trim();
   const telefone = document.getElementById('fornecedorTelefone').value.trim();
+  const ganha_margem = document.getElementById('fornecedorGanhaMargem').checked;
   if(!nome){ alert('Informe o nome do fornecedor.'); return; }
   if(id){
-    await sb.from('fornecedores').update({ nome, telefone }).eq('id', id);
+    await sb.from('fornecedores').update({ nome, telefone, ganha_margem }).eq('id', id);
   } else {
-    await sb.from('fornecedores').insert({ empresa_id: empresaId, nome, telefone });
+    await sb.from('fornecedores').insert({ empresa_id: empresaId, nome, telefone, ganha_margem });
   }
   closeModal('overlayFornecedor');
   await carregarDados();
@@ -489,10 +903,12 @@ function renderFornecedores(){
   const body = document.getElementById('fornecedoresBody');
   const termo = filtroFornecedores;
   const lista = termo ? data.fornecedores.filter(f=>f.nome.toLowerCase().includes(termo) || (f.telefone||'').toLowerCase().includes(termo)) : data.fornecedores;
-  if(lista.length===0){ body.innerHTML = `<tr><td colspan="4" class="empty-note">${termo ? 'Nenhum fornecedor encontrado.' : 'Nenhum fornecedor cadastrado ainda.'}</td></tr>`; return; }
+  if(lista.length===0){ body.innerHTML = `<tr><td colspan="5" class="empty-note">${termo ? 'Nenhum fornecedor encontrado.' : 'Nenhum fornecedor cadastrado ainda.'}</td></tr>`; return; }
   body.innerHTML = lista.map(f=>{
     const nPecas = data.pecas.filter(p=>p.fornecedor_id===f.id).length;
+    const margem = f.ganha_margem !== false;
     return `<tr><td>${escapeHtml(f.nome)}</td><td class="mono">${escapeHtml(f.telefone||'—')}</td>
+      <td><span class="tag-pill">${margem ? 'Com margem' : 'Sem margem'}</span></td>
       <td><span class="tag-pill">${nPecas} peça${nPecas===1?'':'s'}</span></td>
       <td><div class="row-actions"><button class="btn btn-ghost btn-sm" onclick="editFornecedor('${f.id}')">Editar</button><button class="btn btn-ghost btn-sm" onclick="excluirFornecedor('${f.id}')">Excluir</button></div></td></tr>`;
   }).join('');
@@ -502,9 +918,10 @@ function renderFornecedores(){
 function escapeHtml(s){ return (s||'').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
 function diasAte(dataStr){ if(!dataStr) return null; const hoje = new Date(); hoje.setHours(0,0,0,0); const alvo = new Date(dataStr+'T00:00:00'); return Math.round((alvo - hoje) / 86400000); }
 function waLink(telefone, mensagem){ const digits = (telefone||'').replace(/\D/g,''); const withCountry = digits.startsWith('55') ? digits : '55'+digits; return `https://wa.me/${withCountry}?text=${encodeURIComponent(mensagem)}`; }
+function formatBRL(v){ return 'R$ ' + Number(v||0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
 
 // ---------------- RENDER ----------------
-function renderAll(){ renderPainel(); renderAgendamentos(); renderClientes(); renderVeiculos(); renderPecas(); renderFornecedores(); }
+function renderAll(){ renderPainel(); renderAgendamentos(); renderClientes(); renderVeiculos(); renderPecas(); renderFornecedores(); renderOS(); renderFinanceiro(); }
 
 function tagCardHtml(v, cliente, dias, opts){
   const overdue = dias < 0;
@@ -659,7 +1076,7 @@ function renderPecas(){
     return `<tr><td>${escapeHtml(p.nome)}</td><td class="${baixo?'low-stock':''}">${p.qtd}${baixo ? ' · estoque baixo' : ''}</td>
       <td>${fornecedorCell}</td>
       <td class="mono">R$ ${Number(p.preco).toFixed(2)}</td>
-      <td><div class="row-actions"><button class="btn btn-ghost btn-sm" onclick="editPeca('${p.id}')">Editar</button><button class="btn btn-ghost btn-sm" onclick="excluirPeca('${p.id}')">Excluir</button></div></td></tr>`;
+      <td><div class="row-actions"><button class="btn btn-ghost btn-sm" onclick="abrirReporEstoque('${p.id}')">Repor</button><button class="btn btn-ghost btn-sm" onclick="editPeca('${p.id}')">Editar</button><button class="btn btn-ghost btn-sm" onclick="excluirPeca('${p.id}')">Excluir</button></div></td></tr>`;
   }).join('');
 }
 
