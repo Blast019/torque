@@ -32,6 +32,9 @@ input,select{font-family:inherit;}
 .ac-nome{font-size:13.5px;font-weight:500;}
 .ac-sub{font-size:11.5px;color:var(--text-dim);margin-top:1px;}
 .autocomplete-empty{padding:9px 11px;font-size:12.5px;color:var(--text-dim);}
+.os-item-row{display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--bg);border:1px solid var(--border);border-radius:7px;padding:7px 10px;font-size:12.5px;}
+.os-item-row .os-item-remove{background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:12.5px;text-decoration:underline;padding:0;}
+.os-item-row .os-item-remove:hover{color:var(--accent);}
 .btn{border:1px solid var(--border);background:var(--surface-2);color:var(--text);padding:9px 16px;border-radius:8px;font-size:13px;font-weight:500;display:inline-flex;align-items:center;gap:6px;}
 .btn:hover{border-color:var(--text-dim);}
 .btn-primary{background:var(--accent);border-color:var(--accent);color:#1a0d05;font-weight:600;}
