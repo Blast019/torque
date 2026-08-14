@@ -27,6 +27,8 @@ document.getElementById('authToggleLink').addEventListener('click', ()=>{
   document.getElementById('authTitle').textContent = modoCadastro ? 'Criar conta' : 'Entrar';
   document.getElementById('authSub').textContent = modoCadastro ? 'Cadastre sua oficina no Torque' : 'Acesse o painel da sua oficina';
   document.getElementById('authNomeField').classList.toggle('hidden', !modoCadastro);
+  document.getElementById('authCnpjField').classList.toggle('hidden', !modoCadastro);
+  document.getElementById('authTelefoneField').classList.toggle('hidden', !modoCadastro);
   document.getElementById('authSubmitBtn').textContent = modoCadastro ? 'Criar conta' : 'Entrar';
   document.getElementById('authToggle').innerHTML = modoCadastro
     ? 'Já tem conta? <a id="authToggleLink2">Entrar</a>'
@@ -39,6 +41,8 @@ document.getElementById('authSubmitBtn').addEventListener('click', async ()=>{
   const email = document.getElementById('authEmail').value.trim();
   const password = document.getElementById('authPassword').value;
   const nomeOficina = document.getElementById('authNomeOficina').value.trim();
+  const cnpjOficina = document.getElementById('authCnpj').value.trim();
+  const telefoneOficina = document.getElementById('authTelefone').value.trim();
   const errEl = document.getElementById('authError');
   errEl.classList.add('hidden');
 
@@ -49,7 +53,7 @@ document.getElementById('authSubmitBtn').addEventListener('click', async ()=>{
     if(error){ showAuthError(error.message); return; }
     // cria a empresa vinculada ao novo usuário
     if(signData.user){
-      await sb.from('empresas').insert({ owner_id: signData.user.id, nome: nomeOficina || 'Minha oficina' });
+      await sb.from('empresas').insert({ owner_id: signData.user.id, nome: nomeOficina || 'Minha oficina', cnpj: cnpjOficina, telefone: telefoneOficina });
     }
     if(!signData.session){
       showAuthError('Conta criada! Verifique seu e-mail para confirmar antes de entrar.');
@@ -94,6 +98,11 @@ async function iniciarApp(){
   empresaNome = empresa.nome || 'a oficina';
   document.getElementById('oficinaNome').value = empresa.nome || '';
   document.getElementById('oficinaCnpj').value = empresa.cnpj || '';
+  document.getElementById('oficinaTelefone').value = empresa.telefone || '';
+  document.getElementById('oficinaPlanoLabel').textContent = empresa.plano || 'Teste';
+  const statusPlano = empresa.status_assinatura || 'ativo';
+  const statusLabels = { ativo: 'Ativo', inadimplente: 'Inadimplente', cancelado: 'Cancelado' };
+  document.getElementById('oficinaStatusLabel').innerHTML = `<span class="tag-pill">${statusLabels[statusPlano] || statusPlano}</span>`;
 
   document.getElementById('authScreen').classList.add('hidden');
   document.getElementById('appScreen').classList.remove('hidden');
@@ -994,11 +1003,13 @@ function renderFornecedores(){
 document.getElementById('salvarOficinaBtn').addEventListener('click', async ()=>{
   const nome = document.getElementById('oficinaNome').value.trim();
   const cnpj = document.getElementById('oficinaCnpj').value.trim();
+  const telefone = document.getElementById('oficinaTelefone').value.trim();
   if(!nome){ alert('Informe o nome da oficina.'); return; }
-  const { error } = await sb.from('empresas').update({ nome, cnpj }).eq('id', empresaId);
+  const { error } = await sb.from('empresas').update({ nome, cnpj, telefone }).eq('id', empresaId);
   if(error){ alert('Erro ao salvar dados da oficina: ' + error.message); return; }
   empresaNome = nome;
   document.getElementById('empresaNomeLabel').textContent = nome;
+  renderAll();
   alert('Dados da oficina atualizados!');
 });
 
