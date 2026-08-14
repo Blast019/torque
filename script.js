@@ -9,12 +9,16 @@ let filtroClientes = '';
 let filtroVeiculos = '';
 let filtroAgendamentos = '';
 let filtroStatusAgendamento = '';
+let filtroDataAgendamento = '';
 let filtroPecas = '';
 let filtroFornecedores = '';
 let filtroOS = '';
 let filtroStatusOS = '';
 let filtroPagoOS = '';
 let osItensAtual = [];
+let financeiroCursor = new Date();
+let filtroTipoMovimento = '';
+let filtroCategoriaMovimento = '';
 
 // ---------------- AUTH ----------------
 document.getElementById('authToggleLink').addEventListener('click', ()=>{
@@ -139,6 +143,8 @@ document.getElementById('buscaClientes').addEventListener('input', (e)=>{ filtro
 document.getElementById('buscaVeiculos').addEventListener('input', (e)=>{ filtroVeiculos = e.target.value.trim().toLowerCase(); renderVeiculos(); });
 document.getElementById('buscaAgendamentos').addEventListener('input', (e)=>{ filtroAgendamentos = e.target.value.trim().toLowerCase(); renderAgendamentos(); });
 document.getElementById('filtroStatusAgendamentoSelect').addEventListener('change', (e)=>{ filtroStatusAgendamento = e.target.value; renderAgendamentos(); });
+document.getElementById('filtroDataAgendamentoInput').addEventListener('change', (e)=>{ filtroDataAgendamento = e.target.value; renderAgendamentos(); });
+document.getElementById('btnLimparFiltroDataAgendamento').addEventListener('click', ()=>{ filtroDataAgendamento=''; document.getElementById('filtroDataAgendamentoInput').value=''; renderAgendamentos(); });
 document.getElementById('buscaPecas').addEventListener('input', (e)=>{ filtroPecas = e.target.value.trim().toLowerCase(); renderPecas(); });
 document.getElementById('buscaFornecedores').addEventListener('input', (e)=>{ filtroFornecedores = e.target.value.trim().toLowerCase(); renderFornecedores(); });
 document.getElementById('buscaOS').addEventListener('input', (e)=>{ filtroOS = e.target.value.trim().toLowerCase(); renderOS(); });
@@ -382,6 +388,9 @@ function renderAgendamentos(){
   let lista = [...data.agendamentos].sort((a,b)=>(a.data_agendamento||'').localeCompare(b.data_agendamento||''));
   if(filtroStatusAgendamento){
     lista = lista.filter(a=>a.status === filtroStatusAgendamento);
+  }
+  if(filtroDataAgendamento){
+    lista = lista.filter(a=>a.data_agendamento === filtroDataAgendamento);
   }
   if(termo){
     lista = lista.filter(a=>{
@@ -785,21 +794,38 @@ function categoriaLabel(cat){
   return labels[cat] || cat;
 }
 
+document.getElementById('mesAnteriorFinanceiro').addEventListener('click', ()=>{ financeiroCursor.setMonth(financeiroCursor.getMonth()-1); renderFinanceiro(); });
+document.getElementById('mesSeguinteFinanceiro').addEventListener('click', ()=>{ financeiroCursor.setMonth(financeiroCursor.getMonth()+1); renderFinanceiro(); });
+document.getElementById('filtroTipoMovimentoSelect').addEventListener('change', (e)=>{ filtroTipoMovimento = e.target.value; renderFinanceiro(); });
+document.getElementById('filtroCategoriaMovimentoSelect').addEventListener('change', (e)=>{ filtroCategoriaMovimento = e.target.value; renderFinanceiro(); });
+
 function renderFinanceiro(){
   const hoje = new Date();
-  const prefixMes = hoje.toISOString().slice(0,7); // AAAA-MM
-  const doMes = data.movimentos.filter(m=>(m.data||'').startsWith(prefixMes));
-  const faturamento = doMes.filter(m=>m.tipo==='entrada').reduce((s,m)=>s+Number(m.valor||0),0);
-  const despesas = doMes.filter(m=>m.tipo==='saida').reduce((s,m)=>s+Number(m.valor||0),0);
-  const saldo = faturamento - despesas;
+  const prefixMesAtual = hoje.toISOString().slice(0,7);
+  const doMesAtual = data.movimentos.filter(m=>(m.data||'').startsWith(prefixMesAtual));
+  const faturamentoAtual = doMesAtual.filter(m=>m.tipo==='entrada').reduce((s,m)=>s+Number(m.valor||0),0);
+  const despesasAtual = doMesAtual.filter(m=>m.tipo==='saida').reduce((s,m)=>s+Number(m.valor||0),0);
+  document.getElementById('statFaturamentoMes').textContent = formatBRL(faturamentoAtual);
+  document.getElementById('statDespesasMes').textContent = formatBRL(despesasAtual);
+  document.getElementById('statSaldoMes').textContent = formatBRL(faturamentoAtual - despesasAtual);
 
-  ['statFaturamentoMes','statFaturamentoMes2'].forEach(id=>document.getElementById(id).textContent = formatBRL(faturamento));
-  ['statDespesasMes','statDespesasMes2'].forEach(id=>document.getElementById(id).textContent = formatBRL(despesas));
-  ['statSaldoMes','statSaldoMes2'].forEach(id=>document.getElementById(id).textContent = formatBRL(saldo));
+  document.getElementById('mesLabelFinanceiro').textContent = financeiroCursor.toLocaleDateString('pt-BR', { month:'long', year:'numeric' });
+  const prefixMesSelecionado = financeiroCursor.toISOString().slice(0,7);
+  let doMesSelecionado = data.movimentos.filter(m=>(m.data||'').startsWith(prefixMesSelecionado));
+  if(filtroTipoMovimento) doMesSelecionado = doMesSelecionado.filter(m=>m.tipo===filtroTipoMovimento);
+  if(filtroCategoriaMovimento) doMesSelecionado = doMesSelecionado.filter(m=>m.categoria===filtroCategoriaMovimento);
+
+  const faturamento = doMesSelecionado.filter(m=>m.tipo==='entrada').reduce((s,m)=>s+Number(m.valor||0),0);
+  const despesas = doMesSelecionado.filter(m=>m.tipo==='saida').reduce((s,m)=>s+Number(m.valor||0),0);
+  const saldo = faturamento - despesas;
+  document.getElementById('statFaturamentoMes2').textContent = formatBRL(faturamento);
+  document.getElementById('statDespesasMes2').textContent = formatBRL(despesas);
+  document.getElementById('statSaldoMes2').textContent = formatBRL(saldo);
 
   const body = document.getElementById('movimentosBody');
-  if(data.movimentos.length===0){ body.innerHTML = `<tr><td colspan="6" class="empty-note">Nenhuma movimentação registrada ainda.</td></tr>`; return; }
-  body.innerHTML = data.movimentos.map(m=>{
+  if(doMesSelecionado.length===0){ body.innerHTML = `<tr><td colspan="6" class="empty-note">Nenhuma movimentação encontrada para esse período/filtro.</td></tr>`; return; }
+  const lista = [...doMesSelecionado].sort((a,b)=> (b.data||'').localeCompare(a.data||''));
+  body.innerHTML = lista.map(m=>{
     const dataLabel = m.data ? new Date(m.data+'T00:00:00').toLocaleDateString('pt-BR') : '—';
     const entrada = m.tipo === 'entrada';
     return `<tr>
