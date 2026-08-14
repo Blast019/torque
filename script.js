@@ -150,6 +150,7 @@ document.getElementById('btnNovoCliente').addEventListener('click', ()=>{
   document.getElementById('modalClienteTitle').textContent = 'Novo cliente';
   document.getElementById('clienteId').value = '';
   document.getElementById('clienteNome').value = '';
+  document.getElementById('clienteCpf').value = '';
   document.getElementById('clienteTelefone').value = '';
   openModal('overlayCliente');
 });
@@ -160,6 +161,7 @@ function editCliente(id){
   document.getElementById('modalClienteTitle').textContent = 'Editar cliente';
   document.getElementById('clienteId').value = c.id;
   document.getElementById('clienteNome').value = c.nome;
+  document.getElementById('clienteCpf').value = c.cpf || '';
   document.getElementById('clienteTelefone').value = c.telefone || '';
   openModal('overlayCliente');
 }
@@ -167,12 +169,15 @@ function editCliente(id){
 document.getElementById('salvarClienteBtn').addEventListener('click', async ()=>{
   const id = document.getElementById('clienteId').value;
   const nome = document.getElementById('clienteNome').value.trim();
+  const cpf = document.getElementById('clienteCpf').value.trim();
   const telefone = document.getElementById('clienteTelefone').value.trim();
   if(!nome){ alert('Informe o nome do cliente.'); return; }
   if(id){
-    await sb.from('clientes').update({ nome, telefone }).eq('id', id);
+    const { error } = await sb.from('clientes').update({ nome, cpf, telefone }).eq('id', id);
+    if(error){ alert('Erro ao salvar cliente: ' + error.message); return; }
   } else {
-    await sb.from('clientes').insert({ empresa_id: empresaId, nome, telefone });
+    const { error } = await sb.from('clientes').insert({ empresa_id: empresaId, nome, cpf, telefone });
+    if(error){ alert('Erro ao salvar cliente: ' + error.message); return; }
   }
   closeModal('overlayCliente');
   await carregarDados();
@@ -291,7 +296,7 @@ document.getElementById('agendamentoBuscaCliente').addEventListener('input', (e)
   const resultados = data.clientes.filter(c=>{
     const veiculosCliente = data.veiculos.filter(v=>v.cliente_id===c.id);
     const placas = veiculosCliente.map(v=>(v.placa||'').toLowerCase()).join(' ');
-    return c.nome.toLowerCase().includes(termo) || (c.telefone||'').toLowerCase().includes(termo) || placas.includes(termo);
+    return c.nome.toLowerCase().includes(termo) || (c.telefone||'').toLowerCase().includes(termo) || (c.cpf||'').toLowerCase().includes(termo) || placas.includes(termo);
   }).slice(0,8);
   if(resultados.length===0){
     sugestoesEl.innerHTML = `<div class="autocomplete-empty">Nenhum cliente encontrado</div>`;
@@ -451,7 +456,7 @@ document.getElementById('osBuscaCliente').addEventListener('input', (e)=>{
   const resultados = data.clientes.filter(c=>{
     const veiculosCliente = data.veiculos.filter(v=>v.cliente_id===c.id);
     const placas = veiculosCliente.map(v=>(v.placa||'').toLowerCase()).join(' ');
-    return c.nome.toLowerCase().includes(termo) || (c.telefone||'').toLowerCase().includes(termo) || placas.includes(termo);
+    return c.nome.toLowerCase().includes(termo) || (c.telefone||'').toLowerCase().includes(termo) || (c.cpf||'').toLowerCase().includes(termo) || placas.includes(termo);
   }).slice(0,8);
   if(resultados.length===0){
     sugestoesEl.innerHTML = `<div class="autocomplete-empty">Nenhum cliente encontrado</div>`;
@@ -1060,11 +1065,11 @@ async function renderPainel(){
 function renderClientes(){
   const body = document.getElementById('clientesBody');
   const termo = filtroClientes;
-  const lista = termo ? data.clientes.filter(c=>c.nome.toLowerCase().includes(termo) || (c.telefone||'').toLowerCase().includes(termo)) : data.clientes;
-  if(lista.length===0){ body.innerHTML = `<tr><td colspan="4" class="empty-note">${termo ? 'Nenhum cliente encontrado.' : 'Nenhum cliente cadastrado ainda.'}</td></tr>`; return; }
+  const lista = termo ? data.clientes.filter(c=>c.nome.toLowerCase().includes(termo) || (c.telefone||'').toLowerCase().includes(termo) || (c.cpf||'').toLowerCase().includes(termo)) : data.clientes;
+  if(lista.length===0){ body.innerHTML = `<tr><td colspan="5" class="empty-note">${termo ? 'Nenhum cliente encontrado.' : 'Nenhum cliente cadastrado ainda.'}</td></tr>`; return; }
   body.innerHTML = lista.map(c=>{
     const nVeiculos = data.veiculos.filter(v=>v.cliente_id===c.id).length;
-    return `<tr><td>${escapeHtml(c.nome)}</td><td class="mono">${escapeHtml(c.telefone||'—')}</td>
+    return `<tr><td>${escapeHtml(c.nome)}</td><td class="mono">${escapeHtml(c.cpf||'—')}</td><td class="mono">${escapeHtml(c.telefone||'—')}</td>
       <td><span class="tag-pill">${nVeiculos} veículo${nVeiculos===1?'':'s'}</span></td>
       <td><div class="row-actions"><button class="btn btn-ghost btn-sm" onclick="abrirModalAgendamento('${c.id}')">Agendar</button><button class="btn btn-ghost btn-sm" onclick="editCliente('${c.id}')">Editar</button><button class="btn btn-ghost btn-sm" onclick="excluirCliente('${c.id}')">Excluir</button></div></td></tr>`;
   }).join('');
