@@ -3,6 +3,7 @@ const DIAS_AGUARDANDO_RETORNO = 5;
 const LIMITE_AVISOS = 3;
 
 let empresaId = null;
+let empresaNome = 'a oficina';
 let data = { clientes: [], veiculos: [], pecas: [], agendamentos: [], fornecedores: [], os: [], osItens: [], movimentos: [] };
 let modoCadastro = false;
 let filtroClientes = '';
@@ -90,6 +91,7 @@ async function iniciarApp(){
   const empresa = empresas[0];
   empresaId = empresa.id;
   document.getElementById('empresaNomeLabel').textContent = empresa.nome;
+  empresaNome = empresa.nome || 'a oficina';
 
   document.getElementById('authScreen').classList.add('hidden');
   document.getElementById('appScreen').classList.remove('hidden');
@@ -702,7 +704,7 @@ function enviarOSWhatsapp(id){
   const veiculo = data.veiculos.find(v=>v.id===os.veiculo_id);
   const itens = data.osItens.filter(it=>it.os_id===os.id);
   const total = totalOS(os);
-  let msg = `Olá, ${cliente.nome.split(' ')[0]}! Aqui é da oficina.\n\nSegue o resumo da Ordem de Serviço`;
+  let msg = `Olá, ${cliente.nome.split(' ')[0]}! Aqui é da ${empresaNome}.\n\nSegue o resumo da Ordem de Serviço`;
   msg += veiculo ? ` do seu ${veiculo.modelo} (placa ${veiculo.placa}):\n\n` : `:\n\n`;
   if(os.descricao) msg += `Serviço: ${os.descricao}\n\n`;
   if(itens.length > 0){
@@ -1001,7 +1003,7 @@ function tagCardHtml(v, cliente, dias, opts){
   const nomeCliente = cliente ? cliente.nome : 'Cliente não vinculado';
   const telefone = cliente ? cliente.telefone : '';
   const avisos = v.contatos_count || 0;
-  const msg = `Olá, ${nomeCliente.split(' ')[0]}! Aqui é da oficina. A revisão do seu ${v.modelo} (placa ${v.placa}) está ${overdue ? 'vencida' : 'próxima do vencimento'}. Podemos agendar um horário para você?`;
+  const msg = `Olá, ${nomeCliente.split(' ')[0]}! Aqui é da ${empresaNome}. A revisão do seu ${v.modelo} (placa ${v.placa}) está ${overdue ? 'vencida' : 'próxima do vencimento'}. Podemos agendar um horário para você?`;
   const waButton = telefone
     ? `<a class="wa-btn" href="${waLink(telefone, msg)}" target="_blank" rel="noopener" onclick="marcarContatado('${v.id}')">${opts.contatado ? 'Chamar de novo' : 'Chamar no WhatsApp'}</a>`
     : `<span class="tag-pill">sem telefone</span>`;
