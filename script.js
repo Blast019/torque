@@ -635,7 +635,7 @@ async function marcarOSPaga(id){
   const cliente = data.clientes.find(c=>c.id===os.cliente_id);
   const total = totalOS(os);
   const hoje = new Date().toISOString().slice(0,10);
-  const { error: errPago } = await sb.from('ordens_servico').update({ pago: true, pago_em: hoje, status: 'concluida' }).eq('id', id);
+  const { error: errPago } = await sb.from('ordens_servico').update({ pago: true, pago_em: hoje }).eq('id', id);
   if(errPago){ alert('Erro ao marcar OS como paga: ' + errPago.message); return; }
   const { error: errMov } = await sb.from('movimentos_caixa').insert({
     empresa_id: empresaId, tipo: 'entrada', categoria: 'os',
