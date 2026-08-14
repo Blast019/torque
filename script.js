@@ -92,6 +92,8 @@ async function iniciarApp(){
   empresaId = empresa.id;
   document.getElementById('empresaNomeLabel').textContent = empresa.nome;
   empresaNome = empresa.nome || 'a oficina';
+  document.getElementById('oficinaNome').value = empresa.nome || '';
+  document.getElementById('oficinaCnpj').value = empresa.cnpj || '';
 
   document.getElementById('authScreen').classList.add('hidden');
   document.getElementById('appScreen').classList.remove('hidden');
@@ -252,7 +254,7 @@ async function excluirVeiculo(id){
 async function marcarContatado(veiculoId){
   const v = data.veiculos.find(x=>x.id===veiculoId);
   if(!v) return;
-  const hoje = new Date().toISOString().slice(0,10);
+  const hoje = hojeLocal();
   const novoCount = (v.contatos_count || 0) + 1;
   await sb.from('veiculos').update({ ultimo_contato: hoje, contatos_count: novoCount }).eq('id', veiculoId);
   v.ultimo_contato = hoje;
@@ -667,7 +669,7 @@ async function marcarOSPaga(id){
   if(!os || os.pago) return;
   const cliente = data.clientes.find(c=>c.id===os.cliente_id);
   const total = totalOS(os);
-  const hoje = new Date().toISOString().slice(0,10);
+  const hoje = hojeLocal();
   const { error: errPago } = await sb.from('ordens_servico').update({ pago: true, pago_em: hoje }).eq('id', id);
   if(errPago){ alert('Erro ao marcar OS como paga: ' + errPago.message); return; }
   const { error: errMov } = await sb.from('movimentos_caixa').insert({
@@ -769,7 +771,7 @@ document.getElementById('btnNovaDespesa').addEventListener('click', ()=>{
   document.getElementById('despesaCategoria').value = 'aluguel';
   document.getElementById('despesaDescricao').value = '';
   document.getElementById('despesaValor').value = '';
-  document.getElementById('despesaData').value = new Date().toISOString().slice(0,10);
+  document.getElementById('despesaData').value = hojeLocal();
   openModal('overlayDespesa');
 });
 
@@ -777,7 +779,7 @@ document.getElementById('salvarDespesaBtn').addEventListener('click', async ()=>
   const categoria = document.getElementById('despesaCategoria').value;
   const descricao = document.getElementById('despesaDescricao').value.trim();
   const valor = parseFloat(document.getElementById('despesaValor').value) || 0;
-  const dataDespesa = document.getElementById('despesaData').value || new Date().toISOString().slice(0,10);
+  const dataDespesa = document.getElementById('despesaData').value || hojeLocal();
   if(valor <= 0){ alert('Informe um valor maior que zero.'); return; }
   const { error } = await sb.from('movimentos_caixa').insert({ empresa_id: empresaId, tipo: 'saida', categoria, descricao, valor, data: dataDespesa });
   if(error){ alert('Erro ao salvar despesa: ' + error.message); return; }
@@ -922,7 +924,7 @@ document.getElementById('salvarReporBtn').addEventListener('click', async ()=>{
   const { error: errMov } = await sb.from('movimentos_caixa').insert({
     empresa_id: empresaId, tipo: 'saida', categoria: 'estoque',
     descricao: `Reposição de estoque: ${p.nome} x${qtdAdicionar}`,
-    valor: qtdAdicionar * custoUnitario, peca_id: id, data: new Date().toISOString().slice(0,10)
+    valor: qtdAdicionar * custoUnitario, peca_id: id, data: hojeLocal()
   });
   if(errMov){ alert('Erro ao lançar despesa da reposição: ' + errMov.message); return; }
   closeModal('overlayReporEstoque');
@@ -988,8 +990,27 @@ function renderFornecedores(){
   }).join('');
 }
 
+// ---------------- MINHA OFICINA ----------------
+document.getElementById('salvarOficinaBtn').addEventListener('click', async ()=>{
+  const nome = document.getElementById('oficinaNome').value.trim();
+  const cnpj = document.getElementById('oficinaCnpj').value.trim();
+  if(!nome){ alert('Informe o nome da oficina.'); return; }
+  const { error } = await sb.from('empresas').update({ nome, cnpj }).eq('id', empresaId);
+  if(error){ alert('Erro ao salvar dados da oficina: ' + error.message); return; }
+  empresaNome = nome;
+  document.getElementById('empresaNomeLabel').textContent = nome;
+  alert('Dados da oficina atualizados!');
+});
+
 // ---------------- HELPERS ----------------
 function escapeHtml(s){ return (s||'').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+function hojeLocal(){
+  const d = new Date();
+  const ano = d.getFullYear();
+  const mes = String(d.getMonth()+1).padStart(2,'0');
+  const dia = String(d.getDate()).padStart(2,'0');
+  return `${ano}-${mes}-${dia}`;
+}
 function diasAte(dataStr){ if(!dataStr) return null; const hoje = new Date(); hoje.setHours(0,0,0,0); const alvo = new Date(dataStr+'T00:00:00'); return Math.round((alvo - hoje) / 86400000); }
 function waLink(telefone, mensagem){ const digits = (telefone||'').replace(/\D/g,''); const withCountry = digits.startsWith('55') ? digits : '55'+digits; return `https://wa.me/${withCountry}?text=${encodeURIComponent(mensagem)}`; }
 function formatBRL(v){ return 'R$ ' + Number(v||0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
