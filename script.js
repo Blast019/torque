@@ -822,9 +822,11 @@ document.getElementById('salvarPecaBtn').addEventListener('click', async ()=>{
   const fornecedor_id = document.getElementById('pecaFornecedor').value || null;
   if(!nome){ alert('Informe o nome da peça.'); return; }
   if(id){
-    await sb.from('pecas').update({ nome, qtd, estoque_minimo, custo, preco, fornecedor_id }).eq('id', id);
+    const { error } = await sb.from('pecas').update({ nome, qtd, estoque_minimo, custo, preco, fornecedor_id }).eq('id', id);
+    if(error){ alert('Erro ao salvar peça: ' + error.message); return; }
   } else {
-    await sb.from('pecas').insert({ empresa_id: empresaId, nome, qtd, estoque_minimo, custo, preco, fornecedor_id });
+    const { error } = await sb.from('pecas').insert({ empresa_id: empresaId, nome, qtd, estoque_minimo, custo, preco, fornecedor_id });
+    if(error){ alert('Erro ao salvar peça: ' + error.message); return; }
   }
   closeModal('overlayPeca');
   await carregarDados();
@@ -894,9 +896,11 @@ document.getElementById('salvarFornecedorBtn').addEventListener('click', async (
   const ganha_margem = document.getElementById('fornecedorGanhaMargem').checked;
   if(!nome){ alert('Informe o nome do fornecedor.'); return; }
   if(id){
-    await sb.from('fornecedores').update({ nome, telefone, ganha_margem }).eq('id', id);
+    const { error } = await sb.from('fornecedores').update({ nome, telefone, ganha_margem }).eq('id', id);
+    if(error){ alert('Erro ao salvar fornecedor: ' + error.message); return; }
   } else {
-    await sb.from('fornecedores').insert({ empresa_id: empresaId, nome, telefone, ganha_margem });
+    const { error } = await sb.from('fornecedores').insert({ empresa_id: empresaId, nome, telefone, ganha_margem });
+    if(error){ alert('Erro ao salvar fornecedor: ' + error.message); return; }
   }
   closeModal('overlayFornecedor');
   await carregarDados();
