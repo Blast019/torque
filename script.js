@@ -625,7 +625,22 @@ function totalOS(os){
 }
 
 async function marcarOSConcluida(id){
-  await sb.from('ordens_servico').update({ status: 'concluida' }).eq('id', id);
+  const os = data.os.find(x=>x.id===id);
+  if(!os) return;
+  const { error: errStatus } = await sb.from('ordens_servico').update({ status: 'concluida' }).eq('id', id);
+  if(errStatus){ alert('Erro ao concluir OS: ' + errStatus.message); return; }
+
+  if(!os.estoque_baixado){
+    const itens = data.osItens.filter(it=>it.os_id===id);
+    for(const it of itens){
+      if(!it.peca_id) continue;
+      const p = data.pecas.find(x=>x.id===it.peca_id);
+      if(!p) continue;
+      const novaQtd = Math.max(0, (p.qtd||0) - it.quantidade);
+      await sb.from('pecas').update({ qtd: novaQtd }).eq('id', p.id);
+    }
+    await sb.from('ordens_servico').update({ estoque_baixado: true }).eq('id', id);
+  }
   await carregarDados();
 }
 
@@ -648,6 +663,16 @@ async function marcarOSPaga(id){
 
 async function excluirOS(id){
   if(!confirm('Excluir esta ordem de serviço? Isso também remove os lançamentos financeiros ligados a ela.')) return;
+  const os = data.os.find(x=>x.id===id);
+  if(os && os.estoque_baixado){
+    const itens = data.osItens.filter(it=>it.os_id===id);
+    for(const it of itens){
+      if(!it.peca_id) continue;
+      const p = data.pecas.find(x=>x.id===it.peca_id);
+      if(!p) continue;
+      await sb.from('pecas').update({ qtd: (p.qtd||0) + it.quantidade }).eq('id', p.id);
+    }
+  }
   await sb.from('movimentos_caixa').delete().eq('os_id', id);
   await sb.from('ordens_servico').delete().eq('id', id);
   await carregarDados();
