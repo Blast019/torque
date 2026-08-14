@@ -104,7 +104,7 @@
       <div class="tab-panel hidden" id="tab-clientes">
         <div class="topbar"><div><h1>Clientes</h1><p>Base de contatos da oficina</p></div><button class="btn btn-primary" id="btnNovoCliente">+ Novo cliente</button></div>
         <div class="field search-field"><input type="text" id="buscaClientes" placeholder="Buscar por nome ou telefone..."></div>
-        <div class="table-wrap"><table><thead><tr><th>Nome</th><th>Telefone</th><th>Veículos</th><th></th></tr></thead><tbody id="clientesBody"></tbody></table></div>
+        <div class="table-wrap"><table><thead><tr><th>Nome</th><th>CPF</th><th>Telefone</th><th>Veículos</th><th></th></tr></thead><tbody id="clientesBody"></tbody></table></div>
       </div>
 
       <div class="tab-panel hidden" id="tab-veiculos">
@@ -144,6 +144,7 @@
   <h3 id="modalClienteTitle">Novo cliente</h3>
   <input type="hidden" id="clienteId">
   <div class="field"><label>Nome</label><input id="clienteNome" placeholder="Nome do cliente"></div>
+  <div class="field"><label>CPF</label><input id="clienteCpf" placeholder="000.000.000-00"></div>
   <div class="field"><label>Telefone (WhatsApp, com DDD)</label><input id="clienteTelefone" placeholder="11 91234-5678"></div>
   <div class="modal-actions"><button class="btn" onclick="closeModal('overlayCliente')">Cancelar</button><button class="btn btn-primary" id="salvarClienteBtn">Salvar</button></div>
 </div></div>
