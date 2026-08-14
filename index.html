@@ -24,6 +24,8 @@
     <div class="field"><label>E-mail</label><input type="email" id="authEmail" placeholder="voce@oficina.com"></div>
     <div class="field"><label>Senha</label><input type="password" id="authPassword" placeholder="Mínimo 6 caracteres"></div>
     <div class="field hidden" id="authNomeField"><label>Nome da oficina</label><input type="text" id="authNomeOficina" placeholder="Ex: Oficina do João"></div>
+    <div class="field hidden" id="authCnpjField"><label>CNPJ (opcional)</label><input type="text" id="authCnpj" placeholder="00.000.000/0000-00"></div>
+    <div class="field hidden" id="authTelefoneField"><label>Telefone da oficina</label><input type="text" id="authTelefone" placeholder="11 91234-5678"></div>
     <button class="btn btn-primary btn-block" id="authSubmitBtn">Entrar</button>
     <div class="auth-toggle" id="authToggle">Ainda não tem conta? <a id="authToggleLink">Criar conta</a></div>
   </div>
@@ -43,7 +45,7 @@
     <button class="nav-item" data-tab="pecas"><span class="nav-icon">⚙</span><span class="nav-label">Peças</span></button>
     <button class="nav-item" data-tab="fornecedores"><span class="nav-icon">☏</span><span class="nav-label">Fornecedores</span></button>
     <button class="nav-item" data-tab="financeiro"><span class="nav-icon">💰</span><span class="nav-label">Financeiro</span></button>
-    <button class="nav-item" data-tab="minhaoficina"><span class="nav-icon">🏠</span><span class="nav-label">Minha Oficina</span></button>
+    <button class="nav-item" data-tab="minhaoficina"><span class="nav-icon">🏠</span><span class="nav-label">Configurações</span></button>
     <div class="sidebar-foot">
       <div class="company-pill"><div class="company-dot"></div><span id="empresaNomeLabel">—</span></div>
       <button class="logout-btn" id="logoutBtn">Sair da conta</button>
@@ -162,11 +164,17 @@
       </div>
 
       <div class="tab-panel hidden" id="tab-minhaoficina">
-        <div class="topbar"><div><h1>Minha Oficina</h1><p>Dados cadastrais da sua oficina</p></div></div>
+        <div class="topbar"><div><h1>Configurações</h1><p>Dados cadastrais e assinatura da sua oficina</p></div></div>
         <div class="table-wrap" style="max-width:420px;padding:20px;">
           <div class="field"><label>Nome da oficina</label><input type="text" id="oficinaNome" placeholder="Ex: Oficina do João"></div>
           <div class="field"><label>CNPJ (opcional)</label><input type="text" id="oficinaCnpj" placeholder="00.000.000/0000-00"></div>
+          <div class="field"><label>Telefone da oficina</label><input type="text" id="oficinaTelefone" placeholder="11 91234-5678"></div>
           <button class="btn btn-primary" id="salvarOficinaBtn">Salvar</button>
+        </div>
+        <div class="section-head" style="margin-top:28px;"><h2>Assinatura</h2></div>
+        <div class="table-wrap" style="max-width:420px;padding:20px;">
+          <div class="field"><label>Plano atual</label><div id="oficinaPlanoLabel" style="font-size:15px;font-weight:600;">—</div></div>
+          <div class="field"><label>Status</label><div id="oficinaStatusLabel"><span class="tag-pill">—</span></div></div>
         </div>
       </div>
     </div>
