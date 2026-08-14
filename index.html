@@ -72,13 +72,15 @@
 
       <div class="tab-panel hidden" id="tab-agendamentos">
         <div class="topbar"><div><h1>Agendamentos</h1><p>Serviços marcados e motivo da visita</p></div><button class="btn btn-primary" id="btnNovoAgendamento">+ Novo agendamento</button></div>
-        <div class="field search-field" style="display:flex;gap:10px;max-width:520px;">
-          <input type="text" id="buscaAgendamentos" placeholder="Buscar por cliente, placa ou observação..." style="flex:1;">
+        <div class="field search-field" style="display:flex;gap:10px;max-width:520px;flex-wrap:wrap;">
+          <input type="text" id="buscaAgendamentos" placeholder="Buscar por cliente, placa ou observação..." style="flex:1;min-width:180px;">
           <select id="filtroStatusAgendamentoSelect" style="max-width:160px;">
             <option value="">Todos os status</option>
             <option value="agendado">Agendado</option>
             <option value="concluido">Concluído</option>
           </select>
+          <input type="date" id="filtroDataAgendamentoInput" style="max-width:160px;">
+          <button class="btn btn-sm" id="btnLimparFiltroDataAgendamento" type="button">Limpar data</button>
         </div>
         <div class="table-wrap"><table><thead><tr><th>Cliente</th><th>Veículo</th><th>Data</th><th>Observação</th><th>Status</th><th></th></tr></thead><tbody id="agendamentosBody"></tbody></table></div>
       </div>
@@ -127,10 +129,32 @@
 
       <div class="tab-panel hidden" id="tab-financeiro">
         <div class="topbar"><div><h1>Financeiro</h1><p>Fluxo de caixa da oficina</p></div><button class="btn btn-primary" id="btnNovaDespesa">+ Nova despesa</button></div>
+        <div class="agenda-nav">
+          <button class="btn btn-sm" id="mesAnteriorFinanceiro" type="button">‹</button>
+          <div class="agenda-data-label" id="mesLabelFinanceiro">Mês</div>
+          <button class="btn btn-sm" id="mesSeguinteFinanceiro" type="button">›</button>
+        </div>
+        <div class="field search-field" style="display:flex;gap:10px;max-width:420px;">
+          <select id="filtroTipoMovimentoSelect">
+            <option value="">Todos os tipos</option>
+            <option value="entrada">Somente entradas</option>
+            <option value="saida">Somente saídas</option>
+          </select>
+          <select id="filtroCategoriaMovimentoSelect">
+            <option value="">Todas as categorias</option>
+            <option value="os">Ordem de serviço</option>
+            <option value="estoque">Reposição de estoque</option>
+            <option value="aluguel">Aluguel</option>
+            <option value="energia">Energia</option>
+            <option value="agua">Água</option>
+            <option value="funcionarios">Funcionários</option>
+            <option value="outro">Outro</option>
+          </select>
+        </div>
         <div class="stats">
-          <div class="stat-card ok"><div class="stat-num" id="statFaturamentoMes2">R$ 0,00</div><div class="stat-label">Faturamento (mês atual)</div></div>
-          <div class="stat-card overdue"><div class="stat-num" id="statDespesasMes2">R$ 0,00</div><div class="stat-label">Despesas (mês atual)</div></div>
-          <div class="stat-card"><div class="stat-num" id="statSaldoMes2">R$ 0,00</div><div class="stat-label">Saldo (mês atual)</div></div>
+          <div class="stat-card ok"><div class="stat-num" id="statFaturamentoMes2">R$ 0,00</div><div class="stat-label">Faturamento (mês selecionado)</div></div>
+          <div class="stat-card overdue"><div class="stat-num" id="statDespesasMes2">R$ 0,00</div><div class="stat-label">Despesas (mês selecionado)</div></div>
+          <div class="stat-card"><div class="stat-num" id="statSaldoMes2">R$ 0,00</div><div class="stat-label">Saldo (mês selecionado)</div></div>
         </div>
         <div class="section-head"><h2>Movimentações</h2></div>
         <div class="table-wrap"><table><thead><tr><th>Data</th><th>Tipo</th><th>Categoria</th><th>Descrição</th><th>Valor</th><th></th></tr></thead><tbody id="movimentosBody"></tbody></table></div>
