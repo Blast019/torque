@@ -637,9 +637,11 @@ async function marcarOSConcluida(id){
       const p = data.pecas.find(x=>x.id===it.peca_id);
       if(!p) continue;
       const novaQtd = Math.max(0, (p.qtd||0) - it.quantidade);
-      await sb.from('pecas').update({ qtd: novaQtd }).eq('id', p.id);
+      const { error: errQtd } = await sb.from('pecas').update({ qtd: novaQtd }).eq('id', p.id);
+      if(errQtd){ alert(`Erro ao dar baixa em "${p.nome}": ` + errQtd.message); return; }
     }
-    await sb.from('ordens_servico').update({ estoque_baixado: true }).eq('id', id);
+    const { error: errFlag } = await sb.from('ordens_servico').update({ estoque_baixado: true }).eq('id', id);
+    if(errFlag){ alert('Erro ao marcar baixa de estoque da OS: ' + errFlag.message); return; }
   }
   await carregarDados();
 }
@@ -738,6 +740,7 @@ function renderOS(){
       <td><div class="row-actions">
         <button class="btn btn-ghost btn-sm" onclick="enviarOSWhatsapp('${o.id}')">WhatsApp</button>
         ${concluida ? '' : `<button class="btn btn-ghost btn-sm" onclick="marcarOSConcluida('${o.id}')">Concluir</button>`}
+        ${concluida && !o.estoque_baixado ? `<button class="btn btn-ghost btn-sm" onclick="marcarOSConcluida('${o.id}')">Dar baixa no estoque</button>` : ''}
         ${o.pago ? '' : `<button class="btn btn-ghost btn-sm" onclick="marcarOSPaga('${o.id}')">Marcar paga</button>`}
         <button class="btn btn-ghost btn-sm" onclick="editOS('${o.id}')">Editar</button>
         <button class="btn btn-ghost btn-sm" onclick="excluirOS('${o.id}')">Excluir</button>
