@@ -4,10 +4,9 @@ const LIMITE_AVISOS = 3;
 
 let empresaId = null;
 let empresaNome = 'a oficina';
-let data = { clientes: [], veiculos: [], pecas: [], agendamentos: [], fornecedores: [], os: [], osItens: [], movimentos: [] };
+let data = { clientes: [], veiculos: [], pecas: [], agendamentos: [], fornecedores: [], os: [], osItens: [], movimentos: [], marcas: [], modelos: [] };
 let modoCadastro = false;
 let filtroClientes = '';
-let filtroVeiculos = '';
 let filtroAgendamentos = '';
 let filtroStatusAgendamento = '';
 let filtroDataAgendamento = '';
@@ -107,10 +106,20 @@ async function iniciarApp(){
   document.getElementById('authScreen').classList.add('hidden');
   document.getElementById('appScreen').classList.remove('hidden');
 
+  await carregarMarcasModelos();
   await carregarDados();
 }
 
 // ---------------- DADOS ----------------
+async function carregarMarcasModelos(){
+  const [{ data: marcas }, { data: modelos }] = await Promise.all([
+    sb.from('marcas').select('*').order('nome'),
+    sb.from('modelos').select('*').order('nome'),
+  ]);
+  data.marcas = marcas || [];
+  data.modelos = modelos || [];
+}
+
 async function carregarDados(){
   document.getElementById('loadingState').classList.remove('hidden');
   document.getElementById('appContent').classList.add('hidden');
@@ -153,7 +162,6 @@ function closeModal(id){ document.getElementById(id).classList.remove('show'); }
 function openModal(id){ document.getElementById(id).classList.add('show'); }
 
 document.getElementById('buscaClientes').addEventListener('input', (e)=>{ filtroClientes = e.target.value.trim().toLowerCase(); renderClientes(); });
-document.getElementById('buscaVeiculos').addEventListener('input', (e)=>{ filtroVeiculos = e.target.value.trim().toLowerCase(); renderVeiculos(); });
 document.getElementById('buscaAgendamentos').addEventListener('input', (e)=>{ filtroAgendamentos = e.target.value.trim().toLowerCase(); renderAgendamentos(); });
 document.getElementById('filtroStatusAgendamentoSelect').addEventListener('change', (e)=>{ filtroStatusAgendamento = e.target.value; renderAgendamentos(); });
 document.getElementById('filtroDataAgendamentoInput').addEventListener('change', (e)=>{ filtroDataAgendamento = e.target.value; renderAgendamentos(); });
@@ -171,6 +179,7 @@ document.getElementById('btnNovoCliente').addEventListener('click', ()=>{
   document.getElementById('clienteNome').value = '';
   document.getElementById('clienteCpf').value = '';
   document.getElementById('clienteTelefone').value = '';
+  document.getElementById('clienteEmail').value = '';
   openModal('overlayCliente');
 });
 
@@ -182,6 +191,7 @@ function editCliente(id){
   document.getElementById('clienteNome').value = c.nome;
   document.getElementById('clienteCpf').value = c.cpf || '';
   document.getElementById('clienteTelefone').value = c.telefone || '';
+  document.getElementById('clienteEmail').value = c.email || '';
   openModal('overlayCliente');
 }
 
@@ -190,12 +200,13 @@ document.getElementById('salvarClienteBtn').addEventListener('click', async ()=>
   const nome = document.getElementById('clienteNome').value.trim();
   const cpf = document.getElementById('clienteCpf').value.trim();
   const telefone = document.getElementById('clienteTelefone').value.trim();
+  const email = document.getElementById('clienteEmail').value.trim();
   if(!nome){ alert('Informe o nome do cliente.'); return; }
   if(id){
-    const { error } = await sb.from('clientes').update({ nome, cpf, telefone }).eq('id', id);
+    const { error } = await sb.from('clientes').update({ nome, cpf, telefone, email }).eq('id', id);
     if(error){ alert('Erro ao salvar cliente: ' + error.message); return; }
   } else {
-    const { error } = await sb.from('clientes').insert({ empresa_id: empresaId, nome, cpf, telefone });
+    const { error } = await sb.from('clientes').insert({ empresa_id: empresaId, nome, cpf, telefone, email });
     if(error){ alert('Erro ao salvar cliente: ' + error.message); return; }
   }
   closeModal('overlayCliente');
@@ -209,16 +220,23 @@ async function excluirCliente(id){
 }
 
 // ---------------- VEICULOS ----------------
-document.getElementById('btnNovoVeiculo').addEventListener('click', ()=>{
+function abrirModalVeiculo(clienteId){
   if(data.clientes.length===0){ alert('Cadastre um cliente antes de adicionar um veículo.'); return; }
   document.getElementById('modalVeiculoTitle').textContent = 'Novo veículo';
   document.getElementById('veiculoId').value = '';
   document.getElementById('veiculoPlaca').value = '';
-  document.getElementById('veiculoModelo').value = '';
   document.getElementById('veiculoProximaRevisao').value = '';
-  populateClienteSelect();
+  document.getElementById('veiculoMarcaId').value = '';
+  document.getElementById('veiculoModeloId').value = '';
+  document.getElementById('veiculoBuscaMarca').value = '';
+  document.getElementById('veiculoBuscaModelo').value = '';
+  document.getElementById('veiculoBuscaModelo').disabled = true;
+  document.getElementById('veiculoBuscaModelo').placeholder = 'Escolha a marca primeiro';
+  document.getElementById('veiculoMarcaSugestoes').classList.add('hidden');
+  document.getElementById('veiculoModeloSugestoes').classList.add('hidden');
+  populateClienteSelect(clienteId);
   openModal('overlayVeiculo');
-});
+}
 
 function populateClienteSelect(selectedId){
   const sel = document.getElementById('veiculoCliente');
@@ -226,14 +244,97 @@ function populateClienteSelect(selectedId){
   if(selectedId) sel.value = selectedId;
 }
 
+// ---- autocomplete de marca ----
+document.getElementById('veiculoBuscaMarca').addEventListener('input', (e)=>{
+  const termo = e.target.value.trim().toLowerCase();
+  document.getElementById('veiculoMarcaId').value = '';
+  document.getElementById('veiculoModeloId').value = '';
+  document.getElementById('veiculoBuscaModelo').value = '';
+  document.getElementById('veiculoBuscaModelo').disabled = true;
+  document.getElementById('veiculoBuscaModelo').placeholder = 'Escolha a marca primeiro';
+  const sugEl = document.getElementById('veiculoMarcaSugestoes');
+  if(!termo){ sugEl.classList.add('hidden'); sugEl.innerHTML=''; return; }
+  const resultados = data.marcas.filter(m=>m.nome.toLowerCase().includes(termo)).slice(0,10);
+  if(resultados.length===0){
+    sugEl.innerHTML = `<div class="autocomplete-empty">Nenhuma marca encontrada</div>`;
+    sugEl.classList.remove('hidden');
+    return;
+  }
+  sugEl.innerHTML = resultados.map(m=>`<div class="autocomplete-item" onclick="selecionarMarcaVeiculo('${m.id}')"><div class="ac-nome">${escapeHtml(m.nome)}</div></div>`).join('');
+  sugEl.classList.remove('hidden');
+});
+
+function selecionarMarcaVeiculo(marcaId){
+  const m = data.marcas.find(x=>x.id===marcaId);
+  if(!m) return;
+  document.getElementById('veiculoMarcaId').value = m.id;
+  document.getElementById('veiculoBuscaMarca').value = m.nome;
+  document.getElementById('veiculoMarcaSugestoes').classList.add('hidden');
+  const campoModelo = document.getElementById('veiculoBuscaModelo');
+  campoModelo.disabled = false;
+  campoModelo.placeholder = 'Digite pra buscar o modelo';
+  campoModelo.value = '';
+  document.getElementById('veiculoModeloId').value = '';
+  campoModelo.focus();
+}
+
+// ---- autocomplete de modelo (filtrado pela marca escolhida) ----
+document.getElementById('veiculoBuscaModelo').addEventListener('input', (e)=>{
+  const termo = e.target.value.trim().toLowerCase();
+  const marcaId = document.getElementById('veiculoMarcaId').value;
+  document.getElementById('veiculoModeloId').value = '';
+  const sugEl = document.getElementById('veiculoModeloSugestoes');
+  if(!termo || !marcaId){ sugEl.classList.add('hidden'); sugEl.innerHTML=''; return; }
+  const resultados = data.modelos.filter(mo=>mo.marca_id===marcaId && mo.nome.toLowerCase().includes(termo)).slice(0,10);
+  if(resultados.length===0){
+    sugEl.innerHTML = `<div class="autocomplete-empty">Nenhum modelo encontrado — pode digitar manualmente</div>`;
+    sugEl.classList.remove('hidden');
+    return;
+  }
+  sugEl.innerHTML = resultados.map(mo=>`<div class="autocomplete-item" onclick="selecionarModeloVeiculo('${mo.id}')"><div class="ac-nome">${escapeHtml(mo.nome)}</div></div>`).join('');
+  sugEl.classList.remove('hidden');
+});
+
+function selecionarModeloVeiculo(modeloId){
+  const mo = data.modelos.find(x=>x.id===modeloId);
+  if(!mo) return;
+  document.getElementById('veiculoModeloId').value = mo.id;
+  document.getElementById('veiculoBuscaModelo').value = mo.nome;
+  document.getElementById('veiculoModeloSugestoes').classList.add('hidden');
+}
+
+document.addEventListener('click', (e)=>{
+  const campoMarca = document.getElementById('veiculoBuscaMarca');
+  const sugMarca = document.getElementById('veiculoMarcaSugestoes');
+  if(campoMarca && sugMarca && !campoMarca.contains(e.target) && !sugMarca.contains(e.target)){
+    sugMarca.classList.add('hidden');
+  }
+  const campoModelo = document.getElementById('veiculoBuscaModelo');
+  const sugModelo = document.getElementById('veiculoModeloSugestoes');
+  if(campoModelo && sugModelo && !campoModelo.contains(e.target) && !sugModelo.contains(e.target)){
+    sugModelo.classList.add('hidden');
+  }
+});
+
 function editVeiculo(id){
   const v = data.veiculos.find(x=>x.id===id);
   if(!v) return;
   document.getElementById('modalVeiculoTitle').textContent = 'Editar veículo';
   document.getElementById('veiculoId').value = v.id;
   document.getElementById('veiculoPlaca').value = v.placa;
-  document.getElementById('veiculoModelo').value = v.modelo;
   document.getElementById('veiculoProximaRevisao').value = v.proxima_revisao || '';
+
+  const marca = data.marcas.find(m=>m.id===v.marca_id);
+  const modelo = data.modelos.find(mo=>mo.id===v.modelo_id);
+  document.getElementById('veiculoMarcaId').value = v.marca_id || '';
+  document.getElementById('veiculoModeloId').value = v.modelo_id || '';
+  document.getElementById('veiculoBuscaMarca').value = marca ? marca.nome : '';
+  const campoModelo = document.getElementById('veiculoBuscaModelo');
+  // veículo antigo, sem marca/modelo cadastrados: mantém o texto livre já existente
+  campoModelo.value = modelo ? modelo.nome : (v.modelo || '');
+  campoModelo.disabled = !marca;
+  campoModelo.placeholder = marca ? 'Digite pra buscar o modelo' : 'Escolha a marca primeiro';
+
   populateClienteSelect(v.cliente_id);
   openModal('overlayVeiculo');
 }
@@ -242,13 +343,19 @@ document.getElementById('salvarVeiculoBtn').addEventListener('click', async ()=>
   const id = document.getElementById('veiculoId').value;
   const cliente_id = document.getElementById('veiculoCliente').value;
   const placa = document.getElementById('veiculoPlaca').value.trim().toUpperCase();
-  const modelo = document.getElementById('veiculoModelo').value.trim();
+  const marca_id = document.getElementById('veiculoMarcaId').value || null;
+  const modelo_id = document.getElementById('veiculoModeloId').value || null;
+  // "modelo" (texto) sempre é preenchido — pelo nome selecionado, ou pelo texto digitado manualmente
+  const modelo = document.getElementById('veiculoBuscaModelo').value.trim();
   const proxima_revisao = document.getElementById('veiculoProximaRevisao').value || null;
+  if(!cliente_id){ alert('Todo veículo precisa estar vinculado a um cliente.'); return; }
   if(!placa || !modelo){ alert('Informe placa e modelo.'); return; }
   if(id){
-    await sb.from('veiculos').update({ cliente_id, placa, modelo, proxima_revisao }).eq('id', id);
+    const { error } = await sb.from('veiculos').update({ cliente_id, placa, modelo, marca_id, modelo_id, proxima_revisao }).eq('id', id);
+    if(error){ alert('Erro ao salvar veículo: ' + error.message); return; }
   } else {
-    await sb.from('veiculos').insert({ empresa_id: empresaId, cliente_id, placa, modelo, proxima_revisao });
+    const { error } = await sb.from('veiculos').insert({ empresa_id: empresaId, cliente_id, placa, modelo, marca_id, modelo_id, proxima_revisao });
+    if(error){ alert('Erro ao salvar veículo: ' + error.message); return; }
   }
   closeModal('overlayVeiculo');
   await carregarDados();
@@ -259,6 +366,7 @@ async function excluirVeiculo(id){
   await sb.from('veiculos').delete().eq('id', id);
   await carregarDados();
 }
+
 
 async function marcarContatado(veiculoId){
   const v = data.veiculos.find(x=>x.id===veiculoId);
@@ -1027,7 +1135,7 @@ function waLink(telefone, mensagem){ const digits = (telefone||'').replace(/\D/g
 function formatBRL(v){ return 'R$ ' + Number(v||0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
 
 // ---------------- RENDER ----------------
-function renderAll(){ renderPainel(); renderAgendamentos(); renderClientes(); renderVeiculos(); renderPecas(); renderFornecedores(); renderOS(); renderFinanceiro(); }
+function renderAll(){ renderPainel(); renderAgendamentos(); renderClientes(); renderPecas(); renderFornecedores(); renderOS(); renderFinanceiro(); }
 
 function tagCardHtml(v, cliente, dias, opts){
   const overdue = dias < 0;
@@ -1123,42 +1231,68 @@ async function renderPainel(){
 }
 
 function renderClientes(){
-  const body = document.getElementById('clientesBody');
+  const wrap = document.getElementById('clientesLista');
   const termo = filtroClientes;
-  const lista = termo ? data.clientes.filter(c=>c.nome.toLowerCase().includes(termo) || (c.telefone||'').toLowerCase().includes(termo) || (c.cpf||'').toLowerCase().includes(termo)) : data.clientes;
-  if(lista.length===0){ body.innerHTML = `<tr><td colspan="5" class="empty-note">${termo ? 'Nenhum cliente encontrado.' : 'Nenhum cliente cadastrado ainda.'}</td></tr>`; return; }
-  body.innerHTML = lista.map(c=>{
-    const nVeiculos = data.veiculos.filter(v=>v.cliente_id===c.id).length;
-    return `<tr><td>${escapeHtml(c.nome)}</td><td class="mono">${escapeHtml(c.cpf||'—')}</td><td class="mono">${escapeHtml(c.telefone||'—')}</td>
-      <td><span class="tag-pill">${nVeiculos} veículo${nVeiculos===1?'':'s'}</span></td>
-      <td><div class="row-actions"><button class="btn btn-ghost btn-sm" onclick="abrirModalAgendamento('${c.id}')">Agendar</button><button class="btn btn-ghost btn-sm" onclick="editCliente('${c.id}')">Editar</button><button class="btn btn-ghost btn-sm" onclick="excluirCliente('${c.id}')">Excluir</button></div></td></tr>`;
-  }).join('');
-}
 
-function renderVeiculos(){
-  const body = document.getElementById('veiculosBody');
-  const termo = filtroVeiculos;
-  let lista = data.veiculos;
+  let lista = data.clientes;
   if(termo){
-    lista = lista.filter(v=>{
-      const cliente = data.clientes.find(c=>c.id===v.cliente_id);
-      return (v.placa||'').toLowerCase().includes(termo) || (v.modelo||'').toLowerCase().includes(termo) || (cliente ? cliente.nome.toLowerCase().includes(termo) : false);
+    lista = lista.filter(c=>{
+      const veiculosCliente = data.veiculos.filter(v=>v.cliente_id===c.id);
+      const bateVeiculo = veiculosCliente.some(v=>(v.placa||'').toLowerCase().includes(termo) || (v.modelo||'').toLowerCase().includes(termo));
+      return c.nome.toLowerCase().includes(termo)
+        || (c.cpf||'').toLowerCase().includes(termo)
+        || (c.telefone||'').toLowerCase().includes(termo)
+        || (c.email||'').toLowerCase().includes(termo)
+        || bateVeiculo;
     });
   }
-  if(lista.length===0){ body.innerHTML = `<tr><td colspan="5" class="empty-note">${termo ? 'Nenhum veículo encontrado.' : 'Nenhum veículo cadastrado ainda.'}</td></tr>`; return; }
-  body.innerHTML = lista.map(v=>{
-    const cliente = data.clientes.find(c=>c.id===v.cliente_id);
-    const dias = diasAte(v.proxima_revisao);
-    let revisaoLabel = '—';
-    if(v.proxima_revisao){
-      const d = new Date(v.proxima_revisao+'T00:00:00');
-      revisaoLabel = d.toLocaleDateString('pt-BR');
-      if(dias<0) revisaoLabel += ` (vencida)`;
-    }
-    const btnAgendar = cliente ? `<button class="btn btn-ghost btn-sm" onclick="abrirModalAgendamento('${v.cliente_id}','${v.id}')">Agendar</button>` : '';
-    return `<tr><td class="mono">${escapeHtml(v.placa)}</td><td>${escapeHtml(v.modelo)}</td>
-      <td>${cliente ? escapeHtml(cliente.nome) : '<span class="tag-pill">sem cliente</span>'}</td><td>${revisaoLabel}</td>
-      <td><div class="row-actions">${btnAgendar}<button class="btn btn-ghost btn-sm" onclick="editVeiculo('${v.id}')">Editar</button><button class="btn btn-ghost btn-sm" onclick="excluirVeiculo('${v.id}')">Excluir</button></div></td></tr>`;
+
+  if(lista.length===0){
+    wrap.innerHTML = `<div class="empty-note">${termo ? 'Nenhum cliente ou veículo encontrado.' : 'Nenhum cliente cadastrado ainda.'}</div>`;
+    return;
+  }
+
+  wrap.innerHTML = lista.map(c=>{
+    const veiculosCliente = data.veiculos.filter(v=>v.cliente_id===c.id);
+    const infoPartes = [c.cpf ? `CPF ${escapeHtml(c.cpf)}` : null, c.telefone ? escapeHtml(c.telefone) : null, c.email ? escapeHtml(c.email) : null].filter(Boolean);
+
+    const veiculosHtml = veiculosCliente.length === 0
+      ? `<div class="sem-veiculos-note">Nenhum veículo cadastrado para este cliente.</div>`
+      : veiculosCliente.map(v=>{
+          const dias = diasAte(v.proxima_revisao);
+          let revisaoLabel = '';
+          if(v.proxima_revisao){
+            const d = new Date(v.proxima_revisao+'T00:00:00');
+            revisaoLabel = ` · próxima revisão ${d.toLocaleDateString('pt-BR')}${dias<0 ? ' (vencida)' : ''}`;
+          }
+          return `<div class="veiculo-item">
+            <div class="veiculo-item-info">
+              <span class="plate" style="min-width:64px;padding:3px 7px;font-size:11.5px;">${escapeHtml(v.placa||'---')}</span>
+              <span>${escapeHtml(v.modelo||'')}${revisaoLabel}</span>
+            </div>
+            <div class="veiculo-item-acoes">
+              <button class="btn btn-ghost btn-sm" onclick="abrirModalAgendamento('${c.id}','${v.id}')">Agendar</button>
+              <button class="btn btn-ghost btn-sm" onclick="abrirModalOS('${c.id}','${v.id}')">Nova OS</button>
+              <button class="btn btn-ghost btn-sm" onclick="editVeiculo('${v.id}')">Editar</button>
+              <button class="btn btn-ghost btn-sm" onclick="excluirVeiculo('${v.id}')">Excluir</button>
+            </div>
+          </div>`;
+        }).join('');
+
+    return `<div class="cliente-card">
+      <div class="cliente-card-header">
+        <div>
+          <div class="cliente-card-nome">${escapeHtml(c.nome)}</div>
+          <div class="cliente-card-info">${infoPartes.join(' · ') || 'sem CPF, telefone ou e-mail cadastrado'}</div>
+        </div>
+        <div class="cliente-card-acoes">
+          <button class="btn btn-sm" onclick="abrirModalVeiculo('${c.id}')">+ Veículo</button>
+          <button class="btn btn-ghost btn-sm" onclick="editCliente('${c.id}')">Editar</button>
+          <button class="btn btn-ghost btn-sm" onclick="excluirCliente('${c.id}')">Excluir</button>
+        </div>
+      </div>
+      <div class="veiculos-do-cliente">${veiculosHtml}</div>
+    </div>`;
   }).join('');
 }
 
