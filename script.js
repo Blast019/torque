@@ -112,10 +112,12 @@ async function iniciarApp(){
 
 // ---------------- DADOS ----------------
 async function carregarMarcasModelos(){
-  const [{ data: marcas }, { data: modelos }] = await Promise.all([
+  const [{ data: marcas, error: errMarcas }, { data: modelos, error: errModelos }] = await Promise.all([
     sb.from('marcas').select('*').order('nome'),
     sb.from('modelos').select('*').order('nome'),
   ]);
+  if(errMarcas){ alert('Erro ao carregar marcas: ' + errMarcas.message); }
+  if(errModelos){ alert('Erro ao carregar modelos: ' + errModelos.message); }
   data.marcas = marcas || [];
   data.modelos = modelos || [];
 }
