@@ -14,7 +14,6 @@ let filtroDataAgendamento = '';
 let filtroPecas = '';
 let filtroFornecedores = '';
 let filtroOS = '';
-let filtroStatusOS = '';
 let filtroPagoOS = '';
 let osItensAtual = [];
 let financeiroCursor = new Date();
@@ -173,7 +172,6 @@ document.getElementById('btnLimparFiltroDataAgendamento').addEventListener('clic
 document.getElementById('buscaPecas').addEventListener('input', (e)=>{ filtroPecas = e.target.value.trim().toLowerCase(); renderPecas(); });
 document.getElementById('buscaFornecedores').addEventListener('input', (e)=>{ filtroFornecedores = e.target.value.trim().toLowerCase(); renderFornecedores(); });
 document.getElementById('buscaOS').addEventListener('input', (e)=>{ filtroOS = e.target.value.trim().toLowerCase(); renderOS(); });
-document.getElementById('filtroStatusOSSelect').addEventListener('change', (e)=>{ filtroStatusOS = e.target.value; renderOS(); });
 document.getElementById('filtroPagoOSSelect').addEventListener('change', (e)=>{ filtroPagoOS = e.target.value; renderOS(); });
 
 // ---------------- CLIENTES ----------------
@@ -764,7 +762,7 @@ document.getElementById('salvarOSBtn').addEventListener('click', async ()=>{
   } else {
     const { data: novaOS, error: errInsert } = await sb.from('ordens_servico').insert({
       empresa_id: empresaId, cliente_id, veiculo_id, descricao, mao_de_obra,
-      garantia_maodeobra_dias, garantia_pecas_dias, status: 'aberta', pago: false
+      garantia_maodeobra_dias, garantia_pecas_dias, status: 'pendente', pago: false
     }).select();
     if(errInsert){ alert('Erro ao criar OS: ' + errInsert.message); return; }
     osId = novaOS && novaOS[0] ? novaOS[0].id : null;
@@ -786,13 +784,21 @@ function totalOS(os){
   return Number(os.mao_de_obra || 0) + totalPecas;
 }
 
-async function marcarOSConcluida(id){
+const ETAPAS_OS = [
+  { id: 'pendente', label: 'Pendente' },
+  { id: 'em_andamento', label: 'Em andamento' },
+  { id: 'pronto', label: 'Pronto' },
+  { id: 'entregue', label: 'Entregue' },
+];
+
+async function moverStatusOS(id, novoStatus){
   const os = data.os.find(x=>x.id===id);
   if(!os) return;
-  const { error: errStatus } = await sb.from('ordens_servico').update({ status: 'concluida' }).eq('id', id);
-  if(errStatus){ alert('Erro ao concluir OS: ' + errStatus.message); return; }
+  const { error: errStatus } = await sb.from('ordens_servico').update({ status: novoStatus }).eq('id', id);
+  if(errStatus){ alert('Erro ao mover a OS: ' + errStatus.message); return; }
 
-  if(!os.estoque_baixado){
+  // ao chegar em "Entregue", dá baixa no estoque das peças usadas (uma vez só)
+  if(novoStatus === 'entregue' && !os.estoque_baixado){
     const itens = data.osItens.filter(it=>it.os_id===id);
     for(const it of itens){
       if(!it.peca_id) continue;
@@ -871,10 +877,9 @@ function enviarOSWhatsapp(id){
 }
 
 function renderOS(){
-  const body = document.getElementById('osBody');
+  const wrap = document.getElementById('osKanban');
   const termo = filtroOS;
   let lista = [...data.os];
-  if(filtroStatusOS) lista = lista.filter(o=>o.status === filtroStatusOS);
   if(filtroPagoOS) lista = lista.filter(o=> filtroPagoOS === 'pago' ? o.pago : !o.pago);
   if(termo){
     lista = lista.filter(o=>{
@@ -885,28 +890,36 @@ function renderOS(){
         || (o.descricao||'').toLowerCase().includes(termo);
     });
   }
-  if(lista.length===0){ body.innerHTML = `<tr><td colspan="7" class="empty-note">${termo || filtroStatusOS || filtroPagoOS ? 'Nenhuma OS encontrada.' : 'Nenhuma ordem de serviço cadastrada ainda.'}</td></tr>`; return; }
-  body.innerHTML = lista.map(o=>{
-    const cliente = data.clientes.find(c=>c.id===o.cliente_id);
-    const veiculo = data.veiculos.find(v=>v.id===o.veiculo_id);
-    const total = totalOS(o);
-    const concluida = o.status === 'concluida';
-    const descricaoResumo = o.descricao ? (o.descricao.length > 40 ? o.descricao.slice(0,40)+'…' : o.descricao) : '—';
-    return `<tr>
-      <td>${cliente ? escapeHtml(cliente.nome) : '—'}</td>
-      <td>${veiculo ? escapeHtml(veiculo.placa) : '<span class="tag-pill">sem veículo</span>'}</td>
-      <td>${escapeHtml(descricaoResumo)}</td>
-      <td class="mono">R$ ${total.toFixed(2)}</td>
-      <td><span class="tag-pill">${concluida ? 'Concluída' : 'Aberta'}</span></td>
-      <td><span class="tag-pill">${o.pago ? 'Pago' : 'Pendente'}</span></td>
-      <td><div class="row-actions">
-        <button class="btn btn-ghost btn-sm" onclick="enviarOSWhatsapp('${o.id}')">WhatsApp</button>
-        ${concluida ? '' : `<button class="btn btn-ghost btn-sm" onclick="marcarOSConcluida('${o.id}')">Concluir</button>`}
-        ${concluida && !o.estoque_baixado ? `<button class="btn btn-ghost btn-sm" onclick="marcarOSConcluida('${o.id}')">Dar baixa no estoque</button>` : ''}
-        ${o.pago ? '' : `<button class="btn btn-ghost btn-sm" onclick="marcarOSPaga('${o.id}')">Marcar paga</button>`}
-        <button class="btn btn-ghost btn-sm" onclick="editOS('${o.id}')">Editar</button>
-        <button class="btn btn-ghost btn-sm" onclick="excluirOS('${o.id}')">Excluir</button>
-      </div></td></tr>`;
+
+  wrap.innerHTML = ETAPAS_OS.map(etapa=>{
+    const osDaEtapa = lista.filter(o=>(o.status||'pendente') === etapa.id);
+    const cardsHtml = osDaEtapa.length === 0
+      ? `<div class="empty-note" style="padding:6px 2px;">Nada aqui.</div>`
+      : osDaEtapa.map(o=>{
+          const cliente = data.clientes.find(c=>c.id===o.cliente_id);
+          const veiculo = data.veiculos.find(v=>v.id===o.veiculo_id);
+          const total = totalOS(o);
+          const descricaoResumo = o.descricao ? (o.descricao.length > 50 ? o.descricao.slice(0,50)+'…' : o.descricao) : '';
+          const selectEtapas = `<select onchange="moverStatusOS('${o.id}', this.value)">${ETAPAS_OS.map(e=>`<option value="${e.id}" ${e.id===etapa.id?'selected':''}>${e.label}</option>`).join('')}</select>`;
+          const btnBaixa = (etapa.id==='entregue' && !o.estoque_baixado) ? `<button class="btn btn-ghost btn-sm" onclick="moverStatusOS('${o.id}','entregue')">Dar baixa no estoque</button>` : '';
+          return `<div class="kanban-card">
+            <div class="kc-cliente">${cliente ? escapeHtml(cliente.nome) : '—'}</div>
+            <div class="kc-veiculo">${veiculo ? escapeHtml(veiculo.placa)+' — '+escapeHtml(veiculo.modelo) : 'sem veículo'}${descricaoResumo ? ' · '+escapeHtml(descricaoResumo) : ''}</div>
+            <div class="kc-valor">${formatBRL(total)} <span class="tag-pill" style="margin-left:4px;">${o.pago ? 'Pago' : 'Pendente'}</span></div>
+            ${selectEtapas}
+            <div class="kc-acoes">
+              <button class="btn btn-ghost btn-sm" onclick="enviarOSWhatsapp('${o.id}')">WhatsApp</button>
+              ${o.pago ? '' : `<button class="btn btn-ghost btn-sm" onclick="marcarOSPaga('${o.id}')">Marcar paga</button>`}
+              ${btnBaixa}
+              <button class="btn btn-ghost btn-sm" onclick="editOS('${o.id}')">Editar</button>
+              <button class="btn btn-ghost btn-sm" onclick="excluirOS('${o.id}')">Excluir</button>
+            </div>
+          </div>`;
+        }).join('');
+    return `<div class="kanban-col">
+      <div class="kanban-col-title">${etapa.label} <span class="kanban-count">${osDaEtapa.length}</span></div>
+      ${cardsHtml}
+    </div>`;
   }).join('');
 }
 
