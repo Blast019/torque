@@ -143,3 +143,16 @@ tr:hover td{background:var(--surface-2);}
 .sem-veiculos-note{font-size:12.5px;color:var(--text-dim);padding:4px 0;}
 .cliente-card.cliente-inativo{opacity:0.6;}
 .ativo-pill{background:var(--ok-dim);color:var(--ok);}
+
+.kanban-board{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;align-items:start;}
+.kanban-col{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px;min-height:80px;}
+.kanban-col-title{font-family:'Oswald';font-size:13px;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-dim);margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;}
+.kanban-count{background:var(--surface-2);color:var(--text-dim);font-size:11px;padding:1px 7px;border-radius:20px;}
+.kanban-card{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:8px;font-size:12.5px;}
+.kanban-card .kc-cliente{font-weight:600;font-size:13.5px;}
+.kanban-card .kc-veiculo{color:var(--text-dim);font-size:11.5px;margin:1px 0 6px;}
+.kanban-card .kc-valor{font-family:'JetBrains Mono';color:var(--accent);font-weight:700;margin-bottom:6px;}
+.kanban-card select{width:100%;background:var(--surface-2);border:1px solid var(--border);border-radius:6px;padding:6px;color:var(--text);font-size:12px;margin-bottom:6px;}
+.kanban-card .kc-acoes{display:flex;flex-wrap:wrap;gap:4px;}
+@media(max-width:1000px){ .kanban-board{grid-template-columns:repeat(2,1fr);} }
+@media(max-width:640px){ .kanban-board{grid-template-columns:1fr;} }
