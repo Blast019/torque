@@ -91,18 +91,13 @@
         <div class="topbar"><div><h1>Ordens de Serviço</h1><p>Serviços realizados, peças usadas e garantia</p></div><button class="btn btn-primary" id="btnNovaOS">+ Nova OS</button></div>
         <div class="field search-field" style="display:flex;gap:10px;max-width:600px;">
           <input type="text" id="buscaOS" placeholder="Buscar por cliente, placa ou descrição..." style="flex:1;">
-          <select id="filtroStatusOSSelect" style="max-width:150px;">
-            <option value="">Todos os status</option>
-            <option value="aberta">Aberta</option>
-            <option value="concluida">Concluída</option>
-          </select>
           <select id="filtroPagoOSSelect" style="max-width:150px;">
             <option value="">Pago e pendente</option>
             <option value="pago">Pago</option>
             <option value="pendente">Pendente</option>
           </select>
         </div>
-        <div class="table-wrap"><table><thead><tr><th>Cliente</th><th>Veículo</th><th>Descrição</th><th>Total</th><th>Status</th><th>Pagamento</th><th></th></tr></thead><tbody id="osBody"></tbody></table></div>
+        <div class="kanban-board" id="osKanban"></div>
       </div>
 
       <div class="tab-panel hidden" id="tab-clientes">
