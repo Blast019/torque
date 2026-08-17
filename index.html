@@ -107,7 +107,14 @@
 
       <div class="tab-panel hidden" id="tab-clientes">
         <div class="topbar"><div><h1>Clientes</h1><p>Clientes e os veículos de cada um</p></div><button class="btn btn-primary" id="btnNovoCliente">+ Novo cliente</button></div>
-        <div class="field search-field"><input type="text" id="buscaClientes" placeholder="Buscar por nome, CPF, telefone, placa ou modelo..."></div>
+        <div class="field search-field" style="display:flex;gap:10px;max-width:600px;flex-wrap:wrap;">
+          <input type="text" id="buscaClientes" placeholder="Buscar por nome, CPF, telefone, placa ou modelo..." style="flex:1;min-width:180px;">
+          <select id="filtroStatusClienteSelect" style="max-width:150px;">
+            <option value="">Todos</option>
+            <option value="ativo">Ativos</option>
+            <option value="inativo">Inativos</option>
+          </select>
+        </div>
         <div id="clientesLista" class="clientes-lista"></div>
       </div>
 
@@ -201,6 +208,10 @@
     <label>Modelo</label>
     <input type="text" id="veiculoBuscaModelo" placeholder="Escolha a marca primeiro" autocomplete="off" disabled>
     <div id="veiculoModeloSugestoes" class="autocomplete-list hidden"></div>
+  </div>
+  <div style="display:flex;gap:10px;">
+    <div class="field" style="flex:1;"><label>Ano de fabricação</label><input type="number" id="veiculoAnoFabricacao" placeholder="Ex: 2020" min="1950" max="2100"></div>
+    <div class="field" style="flex:1;"><label>Ano do modelo</label><input type="number" id="veiculoAnoModelo" placeholder="Ex: 2021" min="1950" max="2100"></div>
   </div>
   <div class="field"><label>Data prevista da próxima revisão</label><input type="date" id="veiculoProximaRevisao"></div>
   <div class="modal-actions"><button class="btn" onclick="closeModal('overlayVeiculo')">Cancelar</button><button class="btn btn-primary" id="salvarVeiculoBtn">Salvar</button></div>
