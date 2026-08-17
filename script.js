@@ -832,19 +832,40 @@ async function marcarOSPaga(id){
 }
 
 async function excluirOS(id){
-  if(!confirm('Excluir esta ordem de serviço? Isso também remove os lançamentos financeiros ligados a ela.')) return;
   const os = data.os.find(x=>x.id===id);
-  if(os && os.estoque_baixado){
+  let aviso = 'Excluir esta ordem de serviço?';
+  if(os && os.estoque_baixado) aviso += '\n\nAs peças já baixadas do estoque NÃO voltam (o estoque continua como está).';
+  if(os && os.pago) aviso += '\n\nO valor já lançado no caixa NÃO é removido (o faturamento continua como está). Use "Cancelar OS" em vez de excluir se precisar desfazer isso.';
+  if(!confirm(aviso)) return;
+  const { error } = await sb.from('ordens_servico').delete().eq('id', id);
+  if(error){ alert('Erro ao excluir OS: ' + error.message); return; }
+  await carregarDados();
+}
+
+async function cancelarOS(id){
+  const os = data.os.find(x=>x.id===id);
+  if(!os) return;
+  if(os.cancelada){ alert('Essa OS já está cancelada.'); return; }
+  if(!confirm('Cancelar esta OS? Isso devolve as peças usadas ao estoque (se já tinham sido baixadas) e remove o lançamento no caixa (se já tinha sido marcada como paga). O registro da OS continua salvo, só marcado como cancelado.')) return;
+
+  if(os.estoque_baixado){
     const itens = data.osItens.filter(it=>it.os_id===id);
     for(const it of itens){
       if(!it.peca_id) continue;
       const p = data.pecas.find(x=>x.id===it.peca_id);
       if(!p) continue;
-      await sb.from('pecas').update({ qtd: (p.qtd||0) + it.quantidade }).eq('id', p.id);
+      const { error: errQtd } = await sb.from('pecas').update({ qtd: (p.qtd||0) + it.quantidade }).eq('id', p.id);
+      if(errQtd){ alert(`Erro ao devolver "${p.nome}" ao estoque: ` + errQtd.message); return; }
     }
   }
-  await sb.from('movimentos_caixa').delete().eq('os_id', id);
-  await sb.from('ordens_servico').delete().eq('id', id);
+  if(os.pago){
+    const { error: errMov } = await sb.from('movimentos_caixa').delete().eq('os_id', id);
+    if(errMov){ alert('Erro ao remover lançamento do caixa: ' + errMov.message); return; }
+  }
+  const { error: errCancel } = await sb.from('ordens_servico').update({
+    cancelada: true, cancelada_em: hojeLocal(), estoque_baixado: false, pago: false, pago_em: null
+  }).eq('id', id);
+  if(errCancel){ alert('Erro ao cancelar OS: ' + errCancel.message); return; }
   await carregarDados();
 }
 
@@ -900,18 +921,23 @@ function renderOS(){
           const veiculo = data.veiculos.find(v=>v.id===o.veiculo_id);
           const total = totalOS(o);
           const descricaoResumo = o.descricao ? (o.descricao.length > 50 ? o.descricao.slice(0,50)+'…' : o.descricao) : '';
-          const selectEtapas = `<select onchange="moverStatusOS('${o.id}', this.value)">${ETAPAS_OS.map(e=>`<option value="${e.id}" ${e.id===etapa.id?'selected':''}>${e.label}</option>`).join('')}</select>`;
-          const btnBaixa = (etapa.id==='entregue' && !o.estoque_baixado) ? `<button class="btn btn-ghost btn-sm" onclick="moverStatusOS('${o.id}','entregue')">Dar baixa no estoque</button>` : '';
-          return `<div class="kanban-card">
-            <div class="kc-cliente">${cliente ? escapeHtml(cliente.nome) : '—'}</div>
+          const selectEtapas = o.cancelada
+            ? `<select disabled><option>Cancelada</option></select>`
+            : `<select onchange="moverStatusOS('${o.id}', this.value)">${ETAPAS_OS.map(e=>`<option value="${e.id}" ${e.id===etapa.id?'selected':''}>${e.label}</option>`).join('')}</select>`;
+          const btnBaixa = (!o.cancelada && etapa.id==='entregue' && !o.estoque_baixado) ? `<button class="btn btn-ghost btn-sm" onclick="moverStatusOS('${o.id}','entregue')">Dar baixa no estoque</button>` : '';
+          const btnPagar = (!o.cancelada && !o.pago) ? `<button class="btn btn-ghost btn-sm" onclick="marcarOSPaga('${o.id}')">Marcar paga</button>` : '';
+          const btnCancelar = !o.cancelada ? `<button class="btn btn-ghost btn-sm" onclick="cancelarOS('${o.id}')">Cancelar OS</button>` : '';
+          return `<div class="kanban-card${o.cancelada ? ' kanban-card-cancelada' : ''}">
+            <div class="kc-cliente">${cliente ? escapeHtml(cliente.nome) : '—'}${o.cancelada ? ' <span class="tag-pill">Cancelada</span>' : ''}</div>
             <div class="kc-veiculo">${veiculo ? escapeHtml(veiculo.placa)+' — '+escapeHtml(veiculo.modelo) : 'sem veículo'}${descricaoResumo ? ' · '+escapeHtml(descricaoResumo) : ''}</div>
             <div class="kc-valor">${formatBRL(total)} <span class="tag-pill" style="margin-left:4px;">${o.pago ? 'Pago' : 'Pendente'}</span></div>
             ${selectEtapas}
             <div class="kc-acoes">
               <button class="btn btn-ghost btn-sm" onclick="enviarOSWhatsapp('${o.id}')">WhatsApp</button>
-              ${o.pago ? '' : `<button class="btn btn-ghost btn-sm" onclick="marcarOSPaga('${o.id}')">Marcar paga</button>`}
+              ${btnPagar}
               ${btnBaixa}
               <button class="btn btn-ghost btn-sm" onclick="editOS('${o.id}')">Editar</button>
+              ${btnCancelar}
               <button class="btn btn-ghost btn-sm" onclick="excluirOS('${o.id}')">Excluir</button>
             </div>
           </div>`;
