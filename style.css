@@ -141,3 +141,5 @@ tr:hover td{background:var(--surface-2);}
 .veiculo-item-info{display:flex;align-items:center;gap:10px;}
 .veiculo-item-acoes{display:flex;gap:4px;}
 .sem-veiculos-note{font-size:12.5px;color:var(--text-dim);padding:4px 0;}
+.cliente-card.cliente-inativo{opacity:0.6;}
+.ativo-pill{background:var(--ok-dim);color:var(--ok);}
