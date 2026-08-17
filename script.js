@@ -7,6 +7,7 @@ let empresaNome = 'a oficina';
 let data = { clientes: [], veiculos: [], pecas: [], agendamentos: [], fornecedores: [], os: [], osItens: [], movimentos: [], marcas: [], modelos: [] };
 let modoCadastro = false;
 let filtroClientes = '';
+let filtroStatusCliente = '';
 let filtroAgendamentos = '';
 let filtroStatusAgendamento = '';
 let filtroDataAgendamento = '';
@@ -164,6 +165,7 @@ function closeModal(id){ document.getElementById(id).classList.remove('show'); }
 function openModal(id){ document.getElementById(id).classList.add('show'); }
 
 document.getElementById('buscaClientes').addEventListener('input', (e)=>{ filtroClientes = e.target.value.trim().toLowerCase(); renderClientes(); });
+document.getElementById('filtroStatusClienteSelect').addEventListener('change', (e)=>{ filtroStatusCliente = e.target.value; renderClientes(); });
 document.getElementById('buscaAgendamentos').addEventListener('input', (e)=>{ filtroAgendamentos = e.target.value.trim().toLowerCase(); renderAgendamentos(); });
 document.getElementById('filtroStatusAgendamentoSelect').addEventListener('change', (e)=>{ filtroStatusAgendamento = e.target.value; renderAgendamentos(); });
 document.getElementById('filtroDataAgendamentoInput').addEventListener('change', (e)=>{ filtroDataAgendamento = e.target.value; renderAgendamentos(); });
@@ -215,6 +217,23 @@ document.getElementById('salvarClienteBtn').addEventListener('click', async ()=>
   await carregarDados();
 });
 
+async function toggleClienteAtivo(id){
+  const c = data.clientes.find(x=>x.id===id);
+  if(!c) return;
+  const novoStatus = !(c.ativo !== false);
+  const { error } = await sb.from('clientes').update({ ativo: novoStatus }).eq('id', id);
+  if(error){ alert('Erro ao atualizar status do cliente: ' + error.message); return; }
+  await carregarDados();
+}
+
+function lembrarRetorno(id){
+  const c = data.clientes.find(x=>x.id===id);
+  if(!c) return;
+  if(!c.telefone){ alert('Este cliente não tem telefone cadastrado.'); return; }
+  const msg = `Olá, ${c.nome.split(' ')[0]}! Aqui é da ${empresaNome}. Faz um tempo que você não aparece por aqui — que tal agendar uma revisão ou dar uma passada pra gente cuidar do seu veículo?`;
+  window.open(waLink(c.telefone, msg), '_blank');
+}
+
 async function excluirCliente(id){
   if(!confirm('Excluir este cliente?')) return;
   await sb.from('clientes').delete().eq('id', id);
@@ -227,6 +246,8 @@ function abrirModalVeiculo(clienteId){
   document.getElementById('modalVeiculoTitle').textContent = 'Novo veículo';
   document.getElementById('veiculoId').value = '';
   document.getElementById('veiculoPlaca').value = '';
+  document.getElementById('veiculoAnoFabricacao').value = '';
+  document.getElementById('veiculoAnoModelo').value = '';
   document.getElementById('veiculoProximaRevisao').value = '';
   document.getElementById('veiculoMarcaId').value = '';
   document.getElementById('veiculoModeloId').value = '';
@@ -324,6 +345,8 @@ function editVeiculo(id){
   document.getElementById('modalVeiculoTitle').textContent = 'Editar veículo';
   document.getElementById('veiculoId').value = v.id;
   document.getElementById('veiculoPlaca').value = v.placa;
+  document.getElementById('veiculoAnoFabricacao').value = v.ano_fabricacao || '';
+  document.getElementById('veiculoAnoModelo').value = v.ano_modelo || '';
   document.getElementById('veiculoProximaRevisao').value = v.proxima_revisao || '';
 
   const marca = data.marcas.find(m=>m.id===v.marca_id);
@@ -349,14 +372,16 @@ document.getElementById('salvarVeiculoBtn').addEventListener('click', async ()=>
   const modelo_id = document.getElementById('veiculoModeloId').value || null;
   // "modelo" (texto) sempre é preenchido — pelo nome selecionado, ou pelo texto digitado manualmente
   const modelo = document.getElementById('veiculoBuscaModelo').value.trim();
+  const ano_fabricacao = parseInt(document.getElementById('veiculoAnoFabricacao').value) || null;
+  const ano_modelo = parseInt(document.getElementById('veiculoAnoModelo').value) || null;
   const proxima_revisao = document.getElementById('veiculoProximaRevisao').value || null;
   if(!cliente_id){ alert('Todo veículo precisa estar vinculado a um cliente.'); return; }
   if(!placa || !modelo){ alert('Informe placa e modelo.'); return; }
   if(id){
-    const { error } = await sb.from('veiculos').update({ cliente_id, placa, modelo, marca_id, modelo_id, proxima_revisao }).eq('id', id);
+    const { error } = await sb.from('veiculos').update({ cliente_id, placa, modelo, marca_id, modelo_id, ano_fabricacao, ano_modelo, proxima_revisao }).eq('id', id);
     if(error){ alert('Erro ao salvar veículo: ' + error.message); return; }
   } else {
-    const { error } = await sb.from('veiculos').insert({ empresa_id: empresaId, cliente_id, placa, modelo, marca_id, modelo_id, proxima_revisao });
+    const { error } = await sb.from('veiculos').insert({ empresa_id: empresaId, cliente_id, placa, modelo, marca_id, modelo_id, ano_fabricacao, ano_modelo, proxima_revisao });
     if(error){ alert('Erro ao salvar veículo: ' + error.message); return; }
   }
   closeModal('overlayVeiculo');
@@ -1237,6 +1262,9 @@ function renderClientes(){
   const termo = filtroClientes;
 
   let lista = data.clientes;
+  if(filtroStatusCliente){
+    lista = lista.filter(c=> filtroStatusCliente === 'ativo' ? c.ativo !== false : c.ativo === false);
+  }
   if(termo){
     lista = lista.filter(c=>{
       const veiculosCliente = data.veiculos.filter(v=>v.cliente_id===c.id);
@@ -1262,6 +1290,10 @@ function renderClientes(){
       ? `<div class="sem-veiculos-note">Nenhum veículo cadastrado para este cliente.</div>`
       : veiculosCliente.map(v=>{
           const dias = diasAte(v.proxima_revisao);
+          let anoLabel = '';
+          if(v.ano_fabricacao || v.ano_modelo){
+            anoLabel = ` ${v.ano_fabricacao||'?'}/${v.ano_modelo||'?'}`;
+          }
           let revisaoLabel = '';
           if(v.proxima_revisao){
             const d = new Date(v.proxima_revisao+'T00:00:00');
@@ -1270,7 +1302,7 @@ function renderClientes(){
           return `<div class="veiculo-item">
             <div class="veiculo-item-info">
               <span class="plate" style="min-width:64px;padding:3px 7px;font-size:11.5px;">${escapeHtml(v.placa||'---')}</span>
-              <span>${escapeHtml(v.modelo||'')}${revisaoLabel}</span>
+              <span>${escapeHtml(v.modelo||'')}${anoLabel}${revisaoLabel}</span>
             </div>
             <div class="veiculo-item-acoes">
               <button class="btn btn-ghost btn-sm" onclick="abrirModalAgendamento('${c.id}','${v.id}')">Agendar</button>
@@ -1281,14 +1313,16 @@ function renderClientes(){
           </div>`;
         }).join('');
 
-    return `<div class="cliente-card">
+    return `<div class="cliente-card${c.ativo===false ? ' cliente-inativo' : ''}">
       <div class="cliente-card-header">
         <div>
-          <div class="cliente-card-nome">${escapeHtml(c.nome)}</div>
+          <div class="cliente-card-nome">${escapeHtml(c.nome)} <span class="tag-pill ${c.ativo===false ? '' : 'ativo-pill'}">${c.ativo===false ? 'Inativo' : 'Ativo'}</span></div>
           <div class="cliente-card-info">${infoPartes.join(' · ') || 'sem CPF, telefone ou e-mail cadastrado'}</div>
         </div>
         <div class="cliente-card-acoes">
           <button class="btn btn-sm" onclick="abrirModalVeiculo('${c.id}')">+ Veículo</button>
+          <button class="btn btn-ghost btn-sm" onclick="lembrarRetorno('${c.id}')">Lembrar retorno</button>
+          <button class="btn btn-ghost btn-sm" onclick="toggleClienteAtivo('${c.id}')">${c.ativo===false ? 'Ativar' : 'Inativar'}</button>
           <button class="btn btn-ghost btn-sm" onclick="editCliente('${c.id}')">Editar</button>
           <button class="btn btn-ghost btn-sm" onclick="excluirCliente('${c.id}')">Excluir</button>
         </div>
