@@ -44,6 +44,7 @@
     <button class="nav-item" data-tab="pecas"><span class="nav-icon">⚙</span><span class="nav-label">Peças</span></button>
     <button class="nav-item" data-tab="fornecedores"><span class="nav-icon">☏</span><span class="nav-label">Fornecedores</span></button>
     <button class="nav-item" data-tab="financeiro"><span class="nav-icon">💰</span><span class="nav-label">Financeiro</span></button>
+    <button class="nav-item" data-tab="funcionarios"><span class="nav-icon">👤</span><span class="nav-label">Funcionários</span></button>
     <button class="nav-item" data-tab="minhaoficina"><span class="nav-icon">🏠</span><span class="nav-label">Configurações</span></button>
     <div class="sidebar-foot">
       <div class="company-pill"><div class="company-dot"></div><span id="empresaNomeLabel">—</span></div>
@@ -61,7 +62,7 @@
           <div class="stat-card overdue"><div class="stat-num" id="statVencidas">0</div><div class="stat-label">Revisões vencidas</div></div>
           <div class="stat-card soon"><div class="stat-num" id="statProximas">0</div><div class="stat-label">Vencem em 30 dias</div></div>
           <div class="stat-card ok"><div class="stat-num" id="statClientes">0</div><div class="stat-label">Clientes cadastrados</div></div>
-          <div class="stat-card"><div class="stat-num" id="statVeiculos">0</div><div class="stat-label">Veículos cadastrados</div></div>
+          <div class="stat-card"><div class="stat-num" id="statAgendamentosPendentes">0</div><div class="stat-label">Agendamentos pendentes</div></div>
         </div>
         <div class="stats">
           <div class="stat-card ok"><div class="stat-num" id="statFaturamentoMes">R$ 0,00</div><div class="stat-label">Faturamento (mês atual)</div></div>
@@ -160,6 +161,12 @@
         <div class="table-wrap"><table><thead><tr><th>Data</th><th>Tipo</th><th>Categoria</th><th>Descrição</th><th>Valor</th><th></th></tr></thead><tbody id="movimentosBody"></tbody></table></div>
       </div>
 
+      <div class="tab-panel hidden" id="tab-funcionarios">
+        <div class="topbar"><div><h1>Funcionários</h1><p>Equipe da oficina</p></div><button class="btn btn-primary" id="btnNovoFuncionario">+ Novo funcionário</button></div>
+        <div class="field search-field"><input type="text" id="buscaFuncionarios" placeholder="Buscar por nome ou cargo..."></div>
+        <div id="funcionariosLista" class="clientes-lista"></div>
+      </div>
+
       <div class="tab-panel hidden" id="tab-minhaoficina">
         <div class="topbar"><div><h1>Configurações</h1><p>Dados cadastrais e assinatura da sua oficina</p></div></div>
         <div class="table-wrap" style="max-width:420px;padding:20px;">
@@ -235,6 +242,19 @@
   <div class="modal-actions"><button class="btn" onclick="closeModal('overlayFornecedor')">Cancelar</button><button class="btn btn-primary" id="salvarFornecedorBtn">Salvar</button></div>
 </div></div>
 
+<div class="overlay" id="overlayFuncionario"><div class="modal">
+  <h3 id="modalFuncionarioTitle">Novo funcionário</h3>
+  <input type="hidden" id="funcionarioId">
+  <div class="field"><label>Nome</label><input id="funcionarioNome" placeholder="Nome do funcionário"></div>
+  <div class="field"><label>Cargo</label><select id="funcionarioCargo">
+    <option value="Recepcionista">Recepcionista</option>
+    <option value="Mecânico">Mecânico</option>
+    <option value="Gerente">Gerente</option>
+  </select></div>
+  <div class="field"><label>Telefone (opcional)</label><input id="funcionarioTelefone" placeholder="11 91234-5678"></div>
+  <div class="modal-actions"><button class="btn" onclick="closeModal('overlayFuncionario')">Cancelar</button><button class="btn btn-primary" id="salvarFuncionarioBtn">Salvar</button></div>
+</div></div>
+
 <div class="overlay" id="overlayReporEstoque"><div class="modal">
   <h3>Repor estoque</h3>
   <input type="hidden" id="reporPecaId">
@@ -302,6 +322,7 @@
 
   <div class="field"><label>Mão de obra (R$)</label><input type="number" step="0.01" id="osMaoDeObra" placeholder="0.00"></div>
   <div class="field"><label>Garantia da mão de obra (dias)</label><input type="number" id="osGarantiaMaoDeObra" placeholder="Ex: 90"></div>
+  <div class="field"><label>Profissional responsável</label><select id="osFuncionario"><option value="">Não informado</option></select></div>
   <div class="field"><label>Garantia das peças (dias)</label><input type="number" id="osGarantiaPecas" placeholder="Ex: 180"></div>
 
   <div style="text-align:right;font-size:14px;color:var(--text-dim);margin:6px 0 4px;">Total: <strong id="osTotalPreview" style="color:var(--text);">R$ 0,00</strong></div>
