@@ -533,7 +533,7 @@ async function excluirAgendamento(id){
 }
 
 function renderAgendamentos(){
-  const body = document.getElementById('agendamentosBody');
+  const wrap = document.getElementById('agendamentosLista');
   const termo = filtroAgendamentos;
   let lista = [...data.agendamentos].sort((a,b)=>(a.data_agendamento||'').localeCompare(b.data_agendamento||''));
   if(filtroStatusAgendamento){
@@ -551,8 +551,11 @@ function renderAgendamentos(){
         || (a.observacao||'').toLowerCase().includes(termo);
     });
   }
-  if(lista.length===0){ body.innerHTML = `<tr><td colspan="6" class="empty-note">${termo ? 'Nenhum agendamento encontrado.' : 'Nenhum agendamento cadastrado ainda.'}</td></tr>`; return; }
-  body.innerHTML = lista.map(a=>{
+  if(lista.length===0){
+    wrap.innerHTML = `<div class="empty-note">${termo || filtroStatusAgendamento || filtroDataAgendamento ? 'Nenhum agendamento encontrado.' : 'Nenhum agendamento cadastrado ainda.'}</div>`;
+    return;
+  }
+  wrap.innerHTML = lista.map(a=>{
     const cliente = data.clientes.find(c=>c.id===a.cliente_id);
     const veiculo = data.veiculos.find(v=>v.id===a.veiculo_id);
     let dataLabel = '—';
@@ -561,17 +564,20 @@ function renderAgendamentos(){
       if(a.horario) dataLabel += ` às ${a.horario.slice(0,5)}`;
     }
     const concluido = a.status === 'concluido';
-    return `<tr>
-      <td>${cliente ? escapeHtml(cliente.nome) : '—'}</td>
-      <td>${veiculo ? escapeHtml(veiculo.placa)+' — '+escapeHtml(veiculo.modelo) : '<span class="tag-pill">sem veículo</span>'}</td>
-      <td>${dataLabel}</td>
-      <td>${escapeHtml(a.observacao || '—')}</td>
-      <td><span class="tag-pill">${concluido ? 'Concluído' : 'Agendado'}</span></td>
-      <td><div class="row-actions">
-        ${concluido ? '' : `<button class="btn btn-ghost btn-sm" onclick="marcarAgendamentoConcluido('${a.id}')">Concluir</button>`}
-        <button class="btn btn-ghost btn-sm" onclick="editAgendamento('${a.id}')">Editar</button>
-        <button class="btn btn-ghost btn-sm" onclick="excluirAgendamento('${a.id}')">Excluir</button>
-      </div></td></tr>`;
+    const infoPartes = [dataLabel, veiculo ? `${veiculo.placa} — ${veiculo.modelo}` : 'sem veículo', a.observacao || null].filter(Boolean);
+    return `<div class="cliente-card${concluido ? ' cliente-inativo' : ''}">
+      <div class="cliente-card-header">
+        <div>
+          <div class="cliente-card-nome">${cliente ? escapeHtml(cliente.nome) : 'Cliente não vinculado'} <span class="tag-pill ${concluido ? '' : 'ativo-pill'}">${concluido ? 'Concluído' : 'Agendado'}</span></div>
+          <div class="cliente-card-info">${infoPartes.map(escapeHtml).join(' · ')}</div>
+        </div>
+        <div class="cliente-card-acoes">
+          ${concluido ? '' : `<button class="btn btn-sm" onclick="marcarAgendamentoConcluido('${a.id}')">Concluir</button>`}
+          <button class="btn btn-ghost btn-sm" onclick="editAgendamento('${a.id}')">Editar</button>
+          <button class="btn btn-ghost btn-sm" onclick="excluirAgendamento('${a.id}')">Excluir</button>
+        </div>
+      </div>
+    </div>`;
   }).join('');
 }
 
