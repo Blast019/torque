@@ -4,7 +4,8 @@ const LIMITE_AVISOS = 3;
 
 let empresaId = null;
 let empresaNome = 'a oficina';
-let data = { clientes: [], veiculos: [], pecas: [], agendamentos: [], fornecedores: [], os: [], osItens: [], movimentos: [], marcas: [], modelos: [] };
+let data = { clientes: [], veiculos: [], pecas: [], agendamentos: [], fornecedores: [], os: [], osItens: [], movimentos: [], marcas: [], modelos: [], funcionarios: [] };
+let filtroFuncionarios = '';
 let modoCadastro = false;
 let filtroClientes = '';
 let filtroStatusCliente = '';
@@ -128,7 +129,7 @@ async function carregarDados(){
   document.getElementById('loadingState').classList.remove('hidden');
   document.getElementById('appContent').classList.add('hidden');
 
-  const [{ data: clientes }, { data: veiculos }, { data: pecas }, { data: agendamentos }, { data: fornecedores }, { data: os }, { data: osItens }, { data: movimentos }] = await Promise.all([
+  const [{ data: clientes }, { data: veiculos }, { data: pecas }, { data: agendamentos }, { data: fornecedores }, { data: os }, { data: osItens }, { data: movimentos }, { data: funcionarios }] = await Promise.all([
     sb.from('clientes').select('*').eq('empresa_id', empresaId).order('nome'),
     sb.from('veiculos').select('*').eq('empresa_id', empresaId),
     sb.from('pecas').select('*').eq('empresa_id', empresaId).order('nome'),
@@ -137,6 +138,7 @@ async function carregarDados(){
     sb.from('ordens_servico').select('*').eq('empresa_id', empresaId).order('data', { ascending: false }),
     sb.from('os_itens').select('*'),
     sb.from('movimentos_caixa').select('*').eq('empresa_id', empresaId).order('data', { ascending: false }),
+    sb.from('funcionarios').select('*').eq('empresa_id', empresaId).order('nome'),
   ]);
   data.clientes = clientes || [];
   data.veiculos = veiculos || [];
@@ -144,6 +146,7 @@ async function carregarDados(){
   data.agendamentos = agendamentos || [];
   data.fornecedores = fornecedores || [];
   data.os = os || [];
+  data.funcionarios = funcionarios || [];
   const osIds = new Set(data.os.map(o=>o.id));
   data.osItens = (osItens || []).filter(it=>osIds.has(it.os_id));
   data.movimentos = movimentos || [];
@@ -594,6 +597,7 @@ function abrirModalOS(clienteId, veiculoId){
   document.getElementById('osMaoDeObra').value = '';
   document.getElementById('osGarantiaMaoDeObra').value = '';
   document.getElementById('osGarantiaPecas').value = '';
+  populateFuncionarioSelect();
   document.getElementById('osBuscaPeca').value = '';
   document.getElementById('osItemPecaId').value = '';
   document.getElementById('osItemQtd').value = 1;
@@ -742,6 +746,7 @@ function editOS(id){
   document.getElementById('osMaoDeObra').value = os.mao_de_obra || '';
   document.getElementById('osGarantiaMaoDeObra').value = os.garantia_maodeobra_dias || '';
   document.getElementById('osGarantiaPecas').value = os.garantia_pecas_dias || '';
+  populateFuncionarioSelect(os.funcionario_id);
   selecionarClienteOS(os.cliente_id);
   if(os.veiculo_id) document.getElementById('osVeiculo').value = os.veiculo_id;
   osItensAtual = data.osItens.filter(it=>it.os_id===os.id).map(it=>({
@@ -761,18 +766,19 @@ document.getElementById('salvarOSBtn').addEventListener('click', async ()=>{
   const mao_de_obra = parseFloat(document.getElementById('osMaoDeObra').value) || 0;
   const garantia_maodeobra_dias = parseInt(document.getElementById('osGarantiaMaoDeObra').value) || null;
   const garantia_pecas_dias = parseInt(document.getElementById('osGarantiaPecas').value) || null;
+  const funcionario_id = document.getElementById('osFuncionario').value || null;
   if(!cliente_id){ alert('Busque e selecione um cliente.'); return; }
 
   let osId = id;
   if(id){
-    const { error: errUpdate } = await sb.from('ordens_servico').update({ cliente_id, veiculo_id, descricao, mao_de_obra, garantia_maodeobra_dias, garantia_pecas_dias }).eq('id', id);
+    const { error: errUpdate } = await sb.from('ordens_servico').update({ cliente_id, veiculo_id, descricao, mao_de_obra, garantia_maodeobra_dias, garantia_pecas_dias, funcionario_id }).eq('id', id);
     if(errUpdate){ alert('Erro ao salvar OS: ' + errUpdate.message); return; }
     const { error: errDelItens } = await sb.from('os_itens').delete().eq('os_id', id);
     if(errDelItens){ alert('Erro ao atualizar itens da OS: ' + errDelItens.message); return; }
   } else {
     const { data: novaOS, error: errInsert } = await sb.from('ordens_servico').insert({
       empresa_id: empresaId, cliente_id, veiculo_id, descricao, mao_de_obra,
-      garantia_maodeobra_dias, garantia_pecas_dias, status: 'pendente', pago: false
+      garantia_maodeobra_dias, garantia_pecas_dias, funcionario_id, status: 'pendente', pago: false
     }).select();
     if(errInsert){ alert('Erro ao criar OS: ' + errInsert.message); return; }
     osId = novaOS && novaOS[0] ? novaOS[0].id : null;
@@ -940,6 +946,7 @@ function renderOS(){
       : osDaEtapa.map(o=>{
           const cliente = data.clientes.find(c=>c.id===o.cliente_id);
           const veiculo = data.veiculos.find(v=>v.id===o.veiculo_id);
+          const funcionario = data.funcionarios.find(f=>f.id===o.funcionario_id);
           const total = totalOS(o);
           const descricaoResumo = o.descricao ? (o.descricao.length > 50 ? o.descricao.slice(0,50)+'…' : o.descricao) : '';
           const selectEtapas = o.cancelada
@@ -950,7 +957,7 @@ function renderOS(){
           const btnCancelar = !o.cancelada ? `<button class="btn btn-ghost btn-sm" onclick="cancelarOS('${o.id}')">Cancelar OS</button>` : '';
           return `<div class="kanban-card${o.cancelada ? ' kanban-card-cancelada' : ''}">
             <div class="kc-cliente">${cliente ? escapeHtml(cliente.nome) : '—'}${o.cancelada ? ' <span class="tag-pill">Cancelada</span>' : ''}</div>
-            <div class="kc-veiculo">${veiculo ? escapeHtml(veiculo.placa)+' — '+escapeHtml(veiculo.modelo) : 'sem veículo'}${descricaoResumo ? ' · '+escapeHtml(descricaoResumo) : ''}</div>
+            <div class="kc-veiculo">${veiculo ? escapeHtml(veiculo.placa)+' — '+escapeHtml(veiculo.modelo) : 'sem veículo'}${descricaoResumo ? ' · '+escapeHtml(descricaoResumo) : ''}${funcionario ? ' · '+escapeHtml(funcionario.nome) : ''}</div>
             <div class="kc-valor">${formatBRL(total)} <span class="tag-pill" style="margin-left:4px;">${o.pago ? 'Pago' : 'Pendente'}</span></div>
             ${selectEtapas}
             <div class="kc-acoes">
@@ -1198,7 +1205,82 @@ function renderFornecedores(){
   }).join('');
 }
 
-// ---------------- MINHA OFICINA ----------------
+// ---------------- FUNCIONÁRIOS ----------------
+document.getElementById('btnNovoFuncionario').addEventListener('click', ()=>{
+  document.getElementById('modalFuncionarioTitle').textContent = 'Novo funcionário';
+  document.getElementById('funcionarioId').value = '';
+  document.getElementById('funcionarioNome').value = '';
+  document.getElementById('funcionarioCargo').value = 'Mecânico';
+  document.getElementById('funcionarioTelefone').value = '';
+  openModal('overlayFuncionario');
+});
+
+function editFuncionario(id){
+  const f = data.funcionarios.find(x=>x.id===id);
+  if(!f) return;
+  document.getElementById('modalFuncionarioTitle').textContent = 'Editar funcionário';
+  document.getElementById('funcionarioId').value = f.id;
+  document.getElementById('funcionarioNome').value = f.nome;
+  document.getElementById('funcionarioCargo').value = f.cargo || 'Mecânico';
+  document.getElementById('funcionarioTelefone').value = f.telefone || '';
+  openModal('overlayFuncionario');
+}
+
+document.getElementById('salvarFuncionarioBtn').addEventListener('click', async ()=>{
+  const id = document.getElementById('funcionarioId').value;
+  const nome = document.getElementById('funcionarioNome').value.trim();
+  const cargo = document.getElementById('funcionarioCargo').value;
+  const telefone = document.getElementById('funcionarioTelefone').value.trim();
+  if(!nome){ alert('Informe o nome do funcionário.'); return; }
+  if(id){
+    const { error } = await sb.from('funcionarios').update({ nome, cargo, telefone }).eq('id', id);
+    if(error){ alert('Erro ao salvar funcionário: ' + error.message); return; }
+  } else {
+    const { error } = await sb.from('funcionarios').insert({ empresa_id: empresaId, nome, cargo, telefone });
+    if(error){ alert('Erro ao salvar funcionário: ' + error.message); return; }
+  }
+  closeModal('overlayFuncionario');
+  await carregarDados();
+});
+
+async function excluirFuncionario(id){
+  if(!confirm('Excluir este funcionário? As OS que já registraram ele como responsável mantêm o histórico, só perdem esse vínculo.')) return;
+  await sb.from('funcionarios').delete().eq('id', id);
+  await carregarDados();
+}
+
+document.getElementById('buscaFuncionarios').addEventListener('input', (e)=>{ filtroFuncionarios = e.target.value.trim().toLowerCase(); renderFuncionarios(); });
+
+function populateFuncionarioSelect(selectedId){
+  const sel = document.getElementById('osFuncionario');
+  sel.innerHTML = '<option value="">Não informado</option>' + data.funcionarios.map(f=>`<option value="${f.id}">${escapeHtml(f.nome)} (${escapeHtml(f.cargo)})</option>`).join('');
+  sel.value = selectedId || '';
+}
+
+function renderFuncionarios(){
+  const wrap = document.getElementById('funcionariosLista');
+  const termo = filtroFuncionarios;
+  const lista = termo ? data.funcionarios.filter(f=>f.nome.toLowerCase().includes(termo) || (f.cargo||'').toLowerCase().includes(termo)) : data.funcionarios;
+  if(lista.length===0){
+    wrap.innerHTML = `<div class="empty-note">${termo ? 'Nenhum funcionário encontrado.' : 'Nenhum funcionário cadastrado ainda.'}</div>`;
+    return;
+  }
+  wrap.innerHTML = lista.map(f=>{
+    const nOS = data.os.filter(o=>o.funcionario_id===f.id).length;
+    return `<div class="cliente-card">
+      <div class="cliente-card-header">
+        <div>
+          <div class="cliente-card-nome">${escapeHtml(f.nome)} <span class="tag-pill ativo-pill">${escapeHtml(f.cargo)}</span></div>
+          <div class="cliente-card-info">${f.telefone ? escapeHtml(f.telefone)+' · ' : ''}${nOS} OS registrada${nOS===1?'':'s'}</div>
+        </div>
+        <div class="cliente-card-acoes">
+          <button class="btn btn-ghost btn-sm" onclick="editFuncionario('${f.id}')">Editar</button>
+          <button class="btn btn-ghost btn-sm" onclick="excluirFuncionario('${f.id}')">Excluir</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
 document.getElementById('salvarOficinaBtn').addEventListener('click', async ()=>{
   const nome = document.getElementById('oficinaNome').value.trim();
   const cnpj = document.getElementById('oficinaCnpj').value.trim();
@@ -1226,7 +1308,7 @@ function waLink(telefone, mensagem){ const digits = (telefone||'').replace(/\D/g
 function formatBRL(v){ return 'R$ ' + Number(v||0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
 
 // ---------------- RENDER ----------------
-function renderAll(){ renderPainel(); renderAgendamentos(); renderClientes(); renderPecas(); renderFornecedores(); renderOS(); renderFinanceiro(); }
+function renderAll(){ renderPainel(); renderAgendamentos(); renderClientes(); renderPecas(); renderFornecedores(); renderFuncionarios(); renderOS(); renderFinanceiro(); }
 
 function tagCardHtml(v, cliente, dias, opts){
   const overdue = dias < 0;
@@ -1299,7 +1381,7 @@ async function renderPainel(){
   document.getElementById('statVencidas').textContent = vencidas.length;
   document.getElementById('statProximas').textContent = proximas.length;
   document.getElementById('statClientes').textContent = data.clientes.length;
-  document.getElementById('statVeiculos').textContent = data.veiculos.length;
+  document.getElementById('statAgendamentosPendentes').textContent = data.agendamentos.filter(a=>a.status==='agendado').length;
 
   const wrap = document.getElementById('tagsWrap');
   if(linhas.length===0){
