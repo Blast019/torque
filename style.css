@@ -154,5 +154,8 @@ tr:hover td{background:var(--surface-2);}
 .kanban-card .kc-valor{font-family:'JetBrains Mono';color:var(--accent);font-weight:700;margin-bottom:6px;}
 .kanban-card select{width:100%;background:var(--surface-2);border:1px solid var(--border);border-radius:6px;padding:6px;color:var(--text);font-size:12px;margin-bottom:6px;}
 .kanban-card .kc-acoes{display:flex;flex-wrap:wrap;gap:4px;}
+.kanban-card-cancelada{opacity:0.55;}
+.kanban-toggle-btn{width:100%;justify-content:center;margin-top:4px;}
+.kanban-col{max-height:min(80vh,900px);overflow-y:auto;}
 @media(max-width:1000px){ .kanban-board{grid-template-columns:repeat(2,1fr);} }
 @media(max-width:640px){ .kanban-board{grid-template-columns:1fr;} }
