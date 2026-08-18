@@ -15,6 +15,8 @@ let filtroPecas = '';
 let filtroFornecedores = '';
 let filtroOS = '';
 let filtroPagoOS = '';
+let filtroDataOS = '';
+let colunasExpandidas = {};
 let osItensAtual = [];
 let financeiroCursor = new Date();
 let filtroTipoMovimento = '';
@@ -173,6 +175,8 @@ document.getElementById('buscaPecas').addEventListener('input', (e)=>{ filtroPec
 document.getElementById('buscaFornecedores').addEventListener('input', (e)=>{ filtroFornecedores = e.target.value.trim().toLowerCase(); renderFornecedores(); });
 document.getElementById('buscaOS').addEventListener('input', (e)=>{ filtroOS = e.target.value.trim().toLowerCase(); renderOS(); });
 document.getElementById('filtroPagoOSSelect').addEventListener('change', (e)=>{ filtroPagoOS = e.target.value; renderOS(); });
+document.getElementById('filtroDataOSInput').addEventListener('change', (e)=>{ filtroDataOS = e.target.value; renderOS(); });
+document.getElementById('btnLimparFiltroDataOS').addEventListener('click', ()=>{ filtroDataOS=''; document.getElementById('filtroDataOSInput').value=''; renderOS(); });
 
 // ---------------- CLIENTES ----------------
 document.getElementById('btnNovoCliente').addEventListener('click', ()=>{
@@ -897,11 +901,17 @@ function enviarOSWhatsapp(id){
   window.open(waLink(cliente.telefone, msg), '_blank');
 }
 
+function toggleColunaOS(etapaId){
+  colunasExpandidas[etapaId] = !colunasExpandidas[etapaId];
+  renderOS();
+}
+
 function renderOS(){
   const wrap = document.getElementById('osKanban');
   const termo = filtroOS;
   let lista = [...data.os];
   if(filtroPagoOS) lista = lista.filter(o=> filtroPagoOS === 'pago' ? o.pago : !o.pago);
+  if(filtroDataOS) lista = lista.filter(o=> o.data === filtroDataOS);
   if(termo){
     lista = lista.filter(o=>{
       const cliente = data.clientes.find(c=>c.id===o.cliente_id);
@@ -912,9 +922,14 @@ function renderOS(){
     });
   }
 
+  const LIMITE_CARDS_COLUNA = 5;
+
   wrap.innerHTML = ETAPAS_OS.map(etapa=>{
-    const osDaEtapa = lista.filter(o=>(o.status||'pendente') === etapa.id);
-    const cardsHtml = osDaEtapa.length === 0
+    const todasDaEtapa = lista.filter(o=>(o.status||'pendente') === etapa.id);
+    const expandida = !!colunasExpandidas[etapa.id];
+    const osDaEtapa = expandida ? todasDaEtapa : todasDaEtapa.slice(0, LIMITE_CARDS_COLUNA);
+    const escondidas = todasDaEtapa.length - osDaEtapa.length;
+    const cardsHtml = todasDaEtapa.length === 0
       ? `<div class="empty-note" style="padding:6px 2px;">Nada aqui.</div>`
       : osDaEtapa.map(o=>{
           const cliente = data.clientes.find(c=>c.id===o.cliente_id);
@@ -942,9 +957,13 @@ function renderOS(){
             </div>
           </div>`;
         }).join('');
+    const botaoExpandir = todasDaEtapa.length > LIMITE_CARDS_COLUNA
+      ? `<button class="btn btn-sm kanban-toggle-btn" onclick="toggleColunaOS('${etapa.id}')">${expandida ? 'Ver menos' : `Ver mais (${escondidas})`}</button>`
+      : '';
     return `<div class="kanban-col">
-      <div class="kanban-col-title">${etapa.label} <span class="kanban-count">${osDaEtapa.length}</span></div>
+      <div class="kanban-col-title">${etapa.label} <span class="kanban-count">${todasDaEtapa.length}</span></div>
       ${cardsHtml}
+      ${botaoExpandir}
     </div>`;
   }).join('');
 }
