@@ -948,25 +948,45 @@ function renderOS(){
           const veiculo = data.veiculos.find(v=>v.id===o.veiculo_id);
           const funcionario = data.funcionarios.find(f=>f.id===o.funcionario_id);
           const total = totalOS(o);
-          const descricaoResumo = o.descricao ? (o.descricao.length > 50 ? o.descricao.slice(0,50)+'…' : o.descricao) : '';
+          const servicos = (o.descricao||'').split(/\n|;/).map(s=>s.trim()).filter(Boolean);
+          const servicosHtml = servicos.length>0
+            ? `<ul class="os-servicos-lista">${servicos.map(s=>`<li>${escapeHtml(s)}</li>`).join('')}</ul>`
+            : `<div class="os-sem-servico">Sem descrição do serviço</div>`;
+          const statusClasse = o.cancelada ? 'status-cancelada' : (o.pago ? 'status-pago' : 'status-pendente-pg');
           const selectEtapas = o.cancelada
-            ? `<select disabled><option>Cancelada</option></select>`
+            ? ''
             : `<select onchange="moverStatusOS('${o.id}', this.value)">${ETAPAS_OS.map(e=>`<option value="${e.id}" ${e.id===etapa.id?'selected':''}>${e.label}</option>`).join('')}</select>`;
           const btnBaixa = (!o.cancelada && etapa.id==='entregue' && !o.estoque_baixado) ? `<button class="btn btn-ghost btn-sm" onclick="moverStatusOS('${o.id}','entregue')">Dar baixa no estoque</button>` : '';
-          const btnPagar = (!o.cancelada && !o.pago) ? `<button class="btn btn-ghost btn-sm" onclick="marcarOSPaga('${o.id}')">Marcar paga</button>` : '';
-          const btnCancelar = !o.cancelada ? `<button class="btn btn-ghost btn-sm" onclick="cancelarOS('${o.id}')">Cancelar OS</button>` : '';
-          return `<div class="kanban-card${o.cancelada ? ' kanban-card-cancelada' : ''}">
-            <div class="kc-cliente">${cliente ? escapeHtml(cliente.nome) : '—'}${o.cancelada ? ' <span class="tag-pill">Cancelada</span>' : ''}</div>
-            <div class="kc-veiculo">${veiculo ? escapeHtml(veiculo.placa)+' — '+escapeHtml(veiculo.modelo) : 'sem veículo'}${descricaoResumo ? ' · '+escapeHtml(descricaoResumo) : ''}${funcionario ? ' · '+escapeHtml(funcionario.nome) : ''}</div>
-            <div class="kc-valor">${formatBRL(total)} <span class="tag-pill" style="margin-left:4px;">${o.pago ? 'Pago' : 'Pendente'}</span></div>
-            ${selectEtapas}
-            <div class="kc-acoes">
-              <button class="btn btn-ghost btn-sm" onclick="enviarOSWhatsapp('${o.id}')">WhatsApp</button>
+          const btnPagar = (!o.cancelada && !o.pago) ? `<button class="btn os-pagar-btn" onclick="marcarOSPaga('${o.id}')">✓ Marcar como paga</button>` : '';
+          const btnWhats = `<button class="wa-btn os-whats-btn" onclick="enviarOSWhatsapp('${o.id}')">📱 Falar no WhatsApp</button>`;
+          return `<div class="os-card${o.cancelada ? ' os-card-cancelada' : ''}">
+            <div class="os-card-cliente">${cliente ? escapeHtml(cliente.nome) : 'Cliente não vinculado'}</div>
+
+            <div class="os-card-row">🚗 <b>Veículo:</b> ${veiculo ? escapeHtml(veiculo.modelo) : '—'}${veiculo ? `&nbsp;&nbsp;🪪 <b>Placa:</b> ${escapeHtml(veiculo.placa)}` : ''}</div>
+
+            <div class="os-card-row">🔧 <b>Serviços executados:</b></div>
+            ${servicosHtml}
+
+            <div class="os-card-row">👤 <b>Responsável:</b> ${funcionario ? escapeHtml(funcionario.nome) : 'não informado'}</div>
+
+            <div class="os-card-footer">
+              <div class="os-card-total">Valor total: <strong>${formatBRL(total)}</strong></div>
+              <span class="os-status-pill ${statusClasse}">${o.cancelada ? 'CANCELADA' : (o.pago ? 'PAGO' : 'PENDENTE')}</span>
+            </div>
+
+            <div class="os-card-actions">
+              ${btnWhats}
               ${btnPagar}
-              ${btnBaixa}
-              <button class="btn btn-ghost btn-sm" onclick="editOS('${o.id}')">Editar</button>
-              ${btnCancelar}
-              <button class="btn btn-ghost btn-sm" onclick="excluirOS('${o.id}')">Excluir</button>
+              ${selectEtapas}
+              <details class="os-menu">
+                <summary>⋮</summary>
+                <div class="os-menu-items">
+                  <button class="btn btn-ghost btn-sm" onclick="editOS('${o.id}')">Editar</button>
+                  ${btnBaixa}
+                  ${!o.cancelada ? `<button class="btn btn-ghost btn-sm" onclick="cancelarOS('${o.id}')">Cancelar OS</button>` : ''}
+                  <button class="btn btn-ghost btn-sm" onclick="excluirOS('${o.id}')">Excluir</button>
+                </div>
+              </details>
             </div>
           </div>`;
         }).join('');
