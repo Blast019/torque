@@ -89,13 +89,15 @@
 
       <div class="tab-panel hidden" id="tab-os">
         <div class="topbar"><div><h1>Ordens de Serviço</h1><p>Serviços realizados, peças usadas e garantia</p></div><button class="btn btn-primary" id="btnNovaOS">+ Nova OS</button></div>
-        <div class="field search-field" style="display:flex;gap:10px;max-width:600px;">
-          <input type="text" id="buscaOS" placeholder="Buscar por cliente, placa ou descrição..." style="flex:1;">
+        <div class="field search-field" style="display:flex;gap:10px;max-width:600px;flex-wrap:wrap;">
+          <input type="text" id="buscaOS" placeholder="Buscar por cliente, placa ou descrição..." style="flex:1;min-width:180px;">
           <select id="filtroPagoOSSelect" style="max-width:150px;">
             <option value="">Pago e pendente</option>
             <option value="pago">Pago</option>
             <option value="pendente">Pendente</option>
           </select>
+          <input type="date" id="filtroDataOSInput" style="max-width:160px;">
+          <button class="btn btn-sm" id="btnLimparFiltroDataOS" type="button">Limpar data</button>
         </div>
         <div class="kanban-board" id="osKanban"></div>
       </div>
