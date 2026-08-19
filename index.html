@@ -59,18 +59,41 @@
       <div class="tab-panel" id="tab-painel">
         <div class="topbar"><div><h1>Painel</h1><p>Revisões que precisam de atenção agora</p></div></div>
         <div class="stats">
-          <div class="stat-card overdue"><div class="stat-num" id="statVencidas">0</div><div class="stat-label">Revisões vencidas</div></div>
-          <div class="stat-card soon"><div class="stat-num" id="statProximas">0</div><div class="stat-label">Vencem em 30 dias</div></div>
-          <div class="stat-card ok"><div class="stat-num" id="statClientes">0</div><div class="stat-label">Clientes cadastrados</div></div>
-          <div class="stat-card"><div class="stat-num" id="statAgendamentosPendentes">0</div><div class="stat-label">Agendamentos pendentes</div></div>
+          <div class="stat-card overdue"><div><div class="stat-num" id="statVencidas">0</div><div class="stat-label">Revisões vencidas</div></div><div class="stat-icon">📈</div></div>
+          <div class="stat-card soon"><div><div class="stat-num" id="statProximas">0</div><div class="stat-label">Vencem em 30 dias</div></div><div class="stat-icon">📋</div></div>
+          <div class="stat-card ok"><div><div class="stat-num" id="statClientes">0</div><div class="stat-label">Clientes cadastrados</div></div><div class="stat-icon">👤</div></div>
+          <div class="stat-card"><div><div class="stat-num" id="statAgendamentosPendentes">0</div><div class="stat-label">Agendamentos pendentes</div></div><div class="stat-icon">📅</div></div>
         </div>
-        <div class="stats">
-          <div class="stat-card ok"><div class="stat-num" id="statFaturamentoMes">R$ 0,00</div><div class="stat-label">Faturamento (mês atual)</div></div>
-          <div class="stat-card overdue"><div class="stat-num" id="statDespesasMes">R$ 0,00</div><div class="stat-label">Despesas (mês atual)</div></div>
-          <div class="stat-card"><div class="stat-num" id="statSaldoMes">R$ 0,00</div><div class="stat-label">Saldo (mês atual)</div></div>
+
+        <div class="finance-banner">
+          <div class="finance-banner-title">Financeiro — mês atual</div>
+          <div class="finance-banner-grid">
+            <div class="finance-item"><div class="finance-item-label">Faturamento total</div><div class="finance-item-value fi-ok" id="statFaturamentoMes">R$ 0,00</div><div class="finance-icon">📊</div></div>
+            <div class="finance-item"><div class="finance-item-label">Despesas totais</div><div class="finance-item-value fi-warn" id="statDespesasMes">R$ 0,00</div><div class="finance-icon">🥧</div></div>
+            <div class="finance-item"><div class="finance-item-label">Saldo atual</div><div class="finance-item-value" id="statSaldoMes">R$ 0,00</div><div class="finance-icon">📉</div></div>
+          </div>
         </div>
+
         <div class="section-head"><h2>Fila de revisão</h2></div>
-        <div class="tags-wrap" id="tagsWrap"></div>
+        <div class="painel-table-wrap">
+          <div class="painel-table-head"><div>Veículo</div><div>Placa</div><div>Status</div><div>Ações</div></div>
+          <div id="filaVencidasProximas"></div>
+        </div>
+        <div class="painel-pagination" id="paginacaoFila"></div>
+
+        <div class="section-head" style="margin-top:24px;"><h2>Aguardando retorno <span style="font-weight:400;color:var(--text-dim);font-size:12.5px;">(avisado há menos de 5 dias)</span></h2></div>
+        <div class="painel-table-wrap">
+          <div class="painel-table-head"><div>Veículo</div><div>Placa</div><div>Detalhes</div><div>Ações</div></div>
+          <div id="filaAguardando"></div>
+        </div>
+        <div class="painel-pagination" id="paginacaoAguardando"></div>
+
+        <div class="section-head" style="margin-top:24px;"><h2>Sem retorno <span style="font-weight:400;color:var(--text-dim);font-size:12.5px;">(3 avisos enviados, sem resposta)</span></h2></div>
+        <div class="painel-table-wrap">
+          <div class="painel-table-head"><div>Veículo</div><div>Placa</div><div>Detalhes</div><div>Ações</div></div>
+          <div id="filaSemRetorno"></div>
+        </div>
+        <div class="painel-pagination" id="paginacaoSemRetorno"></div>
       </div>
 
       <div class="tab-panel hidden" id="tab-agendamentos">
@@ -92,6 +115,13 @@
         <div class="topbar"><div><h1>Ordens de Serviço</h1><p>Serviços realizados, peças usadas e garantia</p></div><button class="btn btn-primary" id="btnNovaOS">+ Nova OS</button></div>
         <div class="field search-field" style="display:flex;gap:10px;max-width:600px;flex-wrap:wrap;">
           <input type="text" id="buscaOS" placeholder="Buscar por cliente, placa ou descrição..." style="flex:1;min-width:180px;">
+          <select id="filtroStatusOSSelect" style="max-width:150px;">
+            <option value="">Todas as etapas</option>
+            <option value="pendente">Pendente</option>
+            <option value="em_andamento">Em andamento</option>
+            <option value="pronto">Pronto</option>
+            <option value="entregue">Entregue</option>
+          </select>
           <select id="filtroPagoOSSelect" style="max-width:150px;">
             <option value="">Pago e pendente</option>
             <option value="pago">Pago</option>
