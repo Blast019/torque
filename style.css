@@ -181,7 +181,8 @@ tr:hover td{background:var(--surface-2);}
 /* ---- Card de OS (estilo referência) ---- */
 .os-card{background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:12px;}
 .os-card-cancelada{opacity:0.55;}
-.os-card-cliente{font-family:'Oswald';font-size:17px;font-weight:600;margin-bottom:10px;}
+.os-card-cliente{font-family:'Oswald';font-size:17px;font-weight:600;margin-bottom:10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.os-card-plate{font-size:12px;padding:3px 8px;min-width:auto;border-top-width:2px;vertical-align:middle;}
 .os-card-row{font-size:13px;color:var(--text);margin-bottom:6px;line-height:1.5;}
 .os-servicos-lista{margin:2px 0 8px 0;padding-left:26px;font-size:13px;color:var(--text-dim);}
 .os-servicos-lista li{margin-bottom:2px;}
