@@ -16,8 +16,11 @@ let filtroPecas = '';
 let filtroFornecedores = '';
 let filtroOS = '';
 let filtroPagoOS = '';
+let filtroStatusOS = '';
 let filtroDataOS = '';
 let colunasExpandidas = {};
+let painelPaginas = { fila: 1, aguardando: 1, semRetorno: 1 };
+const PAINEL_PAGE_SIZE = 5;
 let osItensAtual = [];
 let financeiroCursor = new Date();
 let filtroTipoMovimento = '';
@@ -178,6 +181,7 @@ document.getElementById('buscaPecas').addEventListener('input', (e)=>{ filtroPec
 document.getElementById('buscaFornecedores').addEventListener('input', (e)=>{ filtroFornecedores = e.target.value.trim().toLowerCase(); renderFornecedores(); });
 document.getElementById('buscaOS').addEventListener('input', (e)=>{ filtroOS = e.target.value.trim().toLowerCase(); renderOS(); });
 document.getElementById('filtroPagoOSSelect').addEventListener('change', (e)=>{ filtroPagoOS = e.target.value; renderOS(); });
+document.getElementById('filtroStatusOSSelect').addEventListener('change', (e)=>{ filtroStatusOS = e.target.value; renderOS(); });
 document.getElementById('filtroDataOSInput').addEventListener('change', (e)=>{ filtroDataOS = e.target.value; renderOS(); });
 document.getElementById('btnLimparFiltroDataOS').addEventListener('click', ()=>{ filtroDataOS=''; document.getElementById('filtroDataOSInput').value=''; renderOS(); });
 
@@ -935,8 +939,9 @@ function renderOS(){
   }
 
   const LIMITE_CARDS_COLUNA = 5;
+  const etapasVisiveis = filtroStatusOS ? ETAPAS_OS.filter(e=>e.id===filtroStatusOS) : ETAPAS_OS;
 
-  wrap.innerHTML = ETAPAS_OS.map(etapa=>{
+  wrap.innerHTML = etapasVisiveis.map(etapa=>{
     const todasDaEtapa = lista.filter(o=>(o.status||'pendente') === etapa.id);
     const expandida = !!colunasExpandidas[etapa.id];
     const osDaEtapa = expandida ? todasDaEtapa : todasDaEtapa.slice(0, LIMITE_CARDS_COLUNA);
@@ -1330,7 +1335,7 @@ function formatBRL(v){ return 'R$ ' + Number(v||0).toLocaleString('pt-BR', { min
 // ---------------- RENDER ----------------
 function renderAll(){ renderPainel(); renderAgendamentos(); renderClientes(); renderPecas(); renderFornecedores(); renderFuncionarios(); renderOS(); renderFinanceiro(); }
 
-function tagCardHtml(v, cliente, dias, opts){
+function painelRowHtml(v, cliente, dias, opts){
   const overdue = dias < 0;
   const statusLabel = overdue ? `${Math.abs(dias)} dia${Math.abs(dias)===1?'':'s'} vencida` : (dias===0 ? 'Vence hoje' : `Vence em ${dias} dia${dias===1?'':'s'}`);
   const nomeCliente = cliente ? cliente.nome : 'Cliente não vinculado';
@@ -1338,29 +1343,60 @@ function tagCardHtml(v, cliente, dias, opts){
   const avisos = v.contatos_count || 0;
   const msg = `Olá, ${nomeCliente.split(' ')[0]}! Aqui é da ${empresaNome}. A revisão do seu ${v.modelo} (placa ${v.placa}) está ${overdue ? 'vencida' : 'próxima do vencimento'}. Podemos agendar um horário para você?`;
   const waButton = telefone
-    ? `<a class="wa-btn" href="${waLink(telefone, msg)}" target="_blank" rel="noopener" onclick="marcarContatado('${v.id}')">${opts.contatado ? 'Chamar de novo' : 'Chamar no WhatsApp'}</a>`
+    ? `<a class="wa-btn btn-sm" href="${waLink(telefone, msg)}" target="_blank" rel="noopener" onclick="marcarContatado('${v.id}')">${opts.contatado||opts.semRetorno ? 'Chamar de novo' : 'Chamar no WhatsApp'}</a>`
     : `<span class="tag-pill">sem telefone</span>`;
+  const btnConcluir = `<button class="btn btn-ghost btn-sm" onclick="marcarRevisaoFeita('${v.id}')" title="Agendou / revisão feita">✓ Concluir</button>`;
 
   if(opts.semRetorno){
-    return `<div class="tag-card sem-retorno">
-      <div class="tag-left"><div class="plate">${escapeHtml(v.placa||'---')}</div>
-        <div class="tag-info"><div class="cliente">${escapeHtml(nomeCliente)}</div><div class="veiculo">${escapeHtml(v.modelo||'')}</div></div></div>
-      <div class="tag-right">
-        <span class="aviso-count">${avisos}/${LIMITE_AVISOS} avisos enviados</span>
-        <button class="btn-link" onclick="marcarRevisaoFeita('${v.id}')">Agendou / revisão feita</button>
-        <button class="btn-link" onclick="reabrirFila('${v.id}')">Reabrir na fila</button>
-      </div></div>`;
+    return `<div class="painel-row">
+      <div class="pr-veiculo"><span class="pr-veiculo-icon">🚗</span><div><div class="pr-cliente">${escapeHtml(nomeCliente)}</div><div class="pr-modelo">${escapeHtml(v.modelo||'')}</div></div></div>
+      <div><span class="plate">${escapeHtml(v.placa||'---')}</span></div>
+      <div class="aviso-count">${avisos}/${LIMITE_AVISOS} avisos enviados</div>
+      <div class="pr-acoes">${waButton}<button class="btn btn-ghost btn-sm" onclick="reabrirFila('${v.id}')">Reabrir na fila</button></div>
+    </div>`;
   }
 
-  return `<div class="tag-card ${opts.contatado ? 'contatado' : (overdue?'':'soon')}">
-    <div class="tag-left"><div class="plate">${escapeHtml(v.placa||'---')}</div>
-      <div class="tag-info"><div class="cliente">${escapeHtml(nomeCliente)}</div><div class="veiculo">${escapeHtml(v.modelo||'')}</div></div></div>
-    <div class="tag-right">
-      ${avisos > 0 ? `<span class="aviso-count">${avisos}/${LIMITE_AVISOS} avisos</span>` : ''}
-      ${opts.contatado ? `<span class="contato-badge">Avisado há ${opts.diasContato} dia${opts.diasContato===1?'':'s'}</span>` : `<span class="tag-status ${overdue?'overdue':'soon'}">${statusLabel}</span>`}
-      <button class="btn-link" onclick="marcarRevisaoFeita('${v.id}')">Agendou / revisão feita</button>
-      ${waButton}
-    </div></div>`;
+  if(opts.contatado){
+    return `<div class="painel-row">
+      <div class="pr-veiculo"><span class="pr-veiculo-icon">🚗</span><div><div class="pr-cliente">${escapeHtml(nomeCliente)}</div><div class="pr-modelo">${escapeHtml(v.modelo||'')}</div></div></div>
+      <div><span class="plate">${escapeHtml(v.placa||'---')}</span></div>
+      <div class="aviso-count">${avisos}/${LIMITE_AVISOS} avisos · avisado há ${opts.diasContato} dia${opts.diasContato===1?'':'s'}</div>
+      <div class="pr-acoes">${waButton}${btnConcluir}</div>
+    </div>`;
+  }
+
+  return `<div class="painel-row">
+    <div class="pr-veiculo"><span class="pr-veiculo-icon">🚗</span><div><div class="pr-cliente">${escapeHtml(nomeCliente)}</div><div class="pr-modelo">${escapeHtml(v.modelo||'')}</div></div></div>
+    <div><span class="plate">${escapeHtml(v.placa||'---')}</span></div>
+    <div><span class="tag-status ${overdue?'overdue':'soon'}">${statusLabel}</span></div>
+    <div class="pr-acoes">${waButton}${btnConcluir}</div>
+  </div>`;
+}
+
+function renderPainelPaginado(containerId, paginacaoId, itens, chavePagina, montarLinha){
+  const totalPaginas = Math.max(1, Math.ceil(itens.length / PAINEL_PAGE_SIZE));
+  if(painelPaginas[chavePagina] > totalPaginas) painelPaginas[chavePagina] = totalPaginas;
+  const pagina = painelPaginas[chavePagina];
+  const inicio = (pagina-1) * PAINEL_PAGE_SIZE;
+  const itensPagina = itens.slice(inicio, inicio + PAINEL_PAGE_SIZE);
+
+  const container = document.getElementById(containerId);
+  container.innerHTML = itensPagina.length === 0
+    ? `<div class="empty-note">Nada por aqui.</div>`
+    : itensPagina.map(montarLinha).join('');
+
+  const pagWrap = document.getElementById(paginacaoId);
+  if(itens.length <= PAINEL_PAGE_SIZE){ pagWrap.innerHTML = ''; return; }
+  pagWrap.innerHTML = `
+    <button ${pagina<=1?'disabled':''} onclick="mudarPaginaPainel('${chavePagina}',${pagina-1})">‹</button>
+    <span class="pg-atual">${pagina}</span>
+    <button ${pagina>=totalPaginas?'disabled':''} onclick="mudarPaginaPainel('${chavePagina}',${pagina+1})">›</button>
+  `;
+}
+
+function mudarPaginaPainel(chave, novaPagina){
+  painelPaginas[chave] = novaPagina;
+  renderPainel();
 }
 
 async function atualizarStatusFila(){
@@ -1403,24 +1439,12 @@ async function renderPainel(){
   document.getElementById('statClientes').textContent = data.clientes.length;
   document.getElementById('statAgendamentosPendentes').textContent = data.agendamentos.filter(a=>a.status==='agendado').length;
 
-  const wrap = document.getElementById('tagsWrap');
-  if(linhas.length===0){
-    wrap.innerHTML = `<div class="empty-note">Nenhuma revisão vencida ou próxima nos próximos 30 dias.</div>`;
-    return;
-  }
-  let html = '';
-  if(fila.length>0){ html += fila.map(({v,cliente,dias})=>tagCardHtml(v,cliente,dias,{contatado:false})).join(''); }
-  else if(aguardando.length===0 && semRetorno.length===0){ html += `<div class="empty-note">Nenhum cliente pendente de aviso agora.</div>`; }
-  else { html += `<div class="empty-note">Nenhum cliente pendente de aviso agora.</div>`; }
-  if(aguardando.length>0){
-    html += `<div class="queue-group-label">Aguardando retorno (avisado há menos de ${DIAS_AGUARDANDO_RETORNO} dias)</div>`;
-    html += aguardando.map(({v,cliente,dias,diasContato})=>tagCardHtml(v,cliente,dias,{contatado:true,diasContato})).join('');
-  }
-  if(semRetorno.length>0){
-    html += `<div class="queue-group-label">Sem retorno (${LIMITE_AVISOS} avisos enviados, sem resposta)</div>`;
-    html += semRetorno.map(({v,cliente,dias})=>tagCardHtml(v,cliente,dias,{semRetorno:true})).join('');
-  }
-  wrap.innerHTML = html;
+  renderPainelPaginado('filaVencidasProximas', 'paginacaoFila', fila, 'fila',
+    ({v,cliente,dias})=>painelRowHtml(v,cliente,dias,{contatado:false}));
+  renderPainelPaginado('filaAguardando', 'paginacaoAguardando', aguardando, 'aguardando',
+    ({v,cliente,dias,diasContato})=>painelRowHtml(v,cliente,dias,{contatado:true,diasContato}));
+  renderPainelPaginado('filaSemRetorno', 'paginacaoSemRetorno', semRetorno, 'semRetorno',
+    ({v,cliente,dias})=>painelRowHtml(v,cliente,dias,{semRetorno:true}));
 }
 
 function renderClientes(){
