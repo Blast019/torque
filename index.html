@@ -1,19 +1,69 @@
-<div class="tab-panel" id="tab-painel">
-<div class="topbar"><div><h1>Painel</h1><p>Revisões que precisam de atenção agora</p></div></div>
-<div class="stats">
-          <div class="stat-card overdue"><div class="stat-num" id="statVencidas">0</div><div class="stat-label">Revisões vencidas</div></div>
-          <div class="stat-card soon"><div class="stat-num" id="statProximas">0</div><div class="stat-label">Vencem em 30 dias</div></div>
-          <div class="stat-card ok"><div class="stat-num" id="statClientes">0</div><div class="stat-label">Clientes cadastrados</div></div>
-          <div class="stat-card"><div class="stat-num" id="statAgendamentosPendentes">0</div><div class="stat-label">Agendamentos pendentes</div></div>
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Torque — Gestão de Oficina</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- Configuração do Supabase -->
+<script src="config.js"></script>
+
+<div id="authScreen" class="auth-wrap">
+  <div class="auth-card">
+    <div class="auth-brand">
+      <div class="brand-mark">T</div>
+      <div><div class="brand-name">Torque</div><div class="brand-sub">gestão de oficina</div></div>
+    </div>
+    <h1 id="authTitle">Entrar</h1>
+    <p class="sub" id="authSub">Acesse o painel da sua oficina</p>
+    <div id="authError" class="auth-error hidden"></div>
+    <div class="field"><label>E-mail</label><input type="email" id="authEmail" placeholder="voce@oficina.com"></div>
+    <div class="field"><label>Senha</label><input type="password" id="authPassword" placeholder="Mínimo 6 caracteres"></div>
+    <div class="field hidden" id="authNomeField"><label>Nome da oficina</label><input type="text" id="authNomeOficina" placeholder="Ex: Oficina do João"></div>
+    <div class="field hidden" id="authCnpjField"><label>CNPJ (opcional)</label><input type="text" id="authCnpj" placeholder="00.000.000/0000-00"></div>
+    <div class="field hidden" id="authTelefoneField"><label>Telefone da oficina</label><input type="text" id="authTelefone" placeholder="11 91234-5678"></div>
+    <button class="btn btn-primary btn-block" id="authSubmitBtn">Entrar</button>
+    <div class="auth-toggle" id="authToggle">Ainda não tem conta? <a id="authToggleLink">Criar conta</a></div>
+  </div>
+</div>
+
+<div id="appScreen" class="app hidden">
+  <div class="sidebar">
+    <div class="brand">
+      <div class="brand-mark">T</div>
+      <div><div class="brand-name">Torque</div><div class="brand-sub">gestão de oficina</div></div>
+    </div>
+    <button class="nav-item active" data-tab="painel"><span class="nav-icon">◈</span><span class="nav-label">Painel</span></button>
+    <button class="nav-item" data-tab="os"><span class="nav-icon">🧾</span><span class="nav-label">Ordens de Serviço</span></button>
+    <button class="nav-item" data-tab="clientes"><span class="nav-icon">☰</span><span class="nav-label">Clientes</span></button>
+    <button class="nav-item" data-tab="pecas"><span class="nav-icon">⚙</span><span class="nav-label">Peças</span></button>
+    <button class="nav-item" data-tab="fornecedores"><span class="nav-icon">☏</span><span class="nav-label">Fornecedores</span></button>
+    <button class="nav-item" data-tab="financeiro"><span class="nav-icon">💰</span><span class="nav-label">Financeiro</span></button>
+    <button class="nav-item" data-tab="funcionarios"><span class="nav-icon">👤</span><span class="nav-label">Funcionários</span></button>
+    <button class="nav-item" data-tab="minhaoficina"><span class="nav-icon">🏠</span><span class="nav-label">Configurações</span></button>
+    <div class="sidebar-foot">
+      <div class="company-pill"><div class="company-dot"></div><span id="empresaNomeLabel">—</span></div>
+      <button class="logout-btn" id="logoutBtn">Sair da conta</button>
+    </div>
+  </div>
+
+  <div class="main">
+    <div id="loadingState" class="loading">Carregando dados da oficina…</div>
+
+    <div id="appContent" class="hidden">
+      <div class="tab-panel" id="tab-painel">
+        <div class="topbar"><div><h1>Painel</h1><p>Revisões que precisam de atenção agora</p></div></div>
+        <div class="stats">
           <div class="stat-card overdue"><div><div class="stat-num" id="statVencidas">0</div><div class="stat-label">Revisões vencidas</div></div><div class="stat-icon">📈</div></div>
           <div class="stat-card soon"><div><div class="stat-num" id="statProximas">0</div><div class="stat-label">Vencem em 30 dias</div></div><div class="stat-icon">📋</div></div>
           <div class="stat-card ok"><div><div class="stat-num" id="statClientes">0</div><div class="stat-label">Clientes cadastrados</div></div><div class="stat-icon">👤</div></div>
-          <div class="stat-card"><div><div class="stat-num" id="statAgendamentosPendentes">0</div><div class="stat-label">Agendamentos pendentes</div></div><div class="stat-icon">📅</div></div>
-</div>
-        <div class="stats">
-          <div class="stat-card ok"><div class="stat-num" id="statFaturamentoMes">R$ 0,00</div><div class="stat-label">Faturamento (mês atual)</div></div>
-          <div class="stat-card overdue"><div class="stat-num" id="statDespesasMes">R$ 0,00</div><div class="stat-label">Despesas (mês atual)</div></div>
-          <div class="stat-card"><div class="stat-num" id="statSaldoMes">R$ 0,00</div><div class="stat-label">Saldo (mês atual)</div></div>
+          <div class="stat-card"><div><div class="stat-num" id="statOSPendentes">0</div><div class="stat-label">OS pendentes</div></div><div class="stat-icon">🧾</div></div>
+          <div class="stat-card"><div><div class="stat-num" id="statOSEmAndamento">0</div><div class="stat-label">OS em andamento</div></div><div class="stat-icon">🔧</div></div>
+        </div>
 
         <div class="finance-banner">
           <div class="finance-banner-title">Financeiro — mês atual</div>
@@ -22,10 +72,9 @@
             <div class="finance-item"><div class="finance-item-label">Despesas totais</div><div class="finance-item-value fi-warn" id="statDespesasMes">R$ 0,00</div><div class="finance-icon">🥧</div></div>
             <div class="finance-item"><div class="finance-item-label">Saldo atual</div><div class="finance-item-value" id="statSaldoMes">R$ 0,00</div><div class="finance-icon">📉</div></div>
           </div>
-</div>
+        </div>
 
-<div class="section-head"><h2>Fila de revisão</h2></div>
-        <div class="tags-wrap" id="tagsWrap"></div>
+        <div class="section-head"><h2>Fila de revisão</h2></div>
         <div class="painel-table-wrap">
           <div class="painel-table-head"><div>Veículo</div><div>Placa</div><div>Status</div><div>Ações</div></div>
           <div id="filaVencidasProximas"></div>
@@ -45,40 +94,242 @@
           <div id="filaSemRetorno"></div>
         </div>
         <div class="painel-pagination" id="paginacaoSemRetorno"></div>
-</div>
+      </div>
 
-<div class="tab-panel hidden" id="tab-agendamentos">
-@@ -92,27 +115,34 @@
-<div class="topbar"><div><h1>Ordens de Serviço</h1><p>Serviços realizados, peças usadas e garantia</p></div><button class="btn btn-primary" id="btnNovaOS">+ Nova OS</button></div>
-<div class="field search-field" style="display:flex;gap:10px;max-width:600px;flex-wrap:wrap;">
-<input type="text" id="buscaOS" placeholder="Buscar por cliente, placa ou descrição..." style="flex:1;min-width:180px;">
+      <div class="tab-panel hidden" id="tab-os">
+        <div class="topbar"><div><h1>Ordens de Serviço</h1><p>Serviços realizados, peças usadas e garantia</p></div><button class="btn btn-primary" id="btnNovaOS">+ Nova OS</button></div>
+        <div class="field search-field" style="display:flex;gap:10px;max-width:600px;flex-wrap:wrap;">
+          <input type="text" id="buscaOS" placeholder="Buscar por cliente, placa ou descrição..." style="flex:1;min-width:180px;">
           <select id="filtroStatusOSSelect" style="max-width:150px;">
             <option value="">Todas as etapas</option>
+            <option value="orcamento">Orçamento</option>
             <option value="pendente">Pendente</option>
             <option value="em_andamento">Em andamento</option>
             <option value="pronto">Pronto</option>
             <option value="entregue">Entregue</option>
           </select>
-<select id="filtroPagoOSSelect" style="max-width:150px;">
-<option value="">Pago e pendente</option>
-<option value="pago">Pago</option>
-<option value="pendente">Pendente</option>
-</select>
-<input type="date" id="filtroDataOSInput" style="max-width:160px;">
-<button class="btn btn-sm" id="btnLimparFiltroDataOS" type="button">Limpar data</button>
-</div>
-<div class="kanban-board" id="osKanban"></div>
+          <select id="filtroPagoOSSelect" style="max-width:150px;">
+            <option value="">Pago e pendente</option>
+            <option value="pago">Pago</option>
+            <option value="pendente">Pendente</option>
+          </select>
+          <input type="date" id="filtroDataOSInput" style="max-width:160px;">
+          <button class="btn btn-sm" id="btnLimparFiltroDataOS" type="button">Limpar data</button>
+        </div>
+        <div class="kanban-board" id="osKanban"></div>
+      </div>
+
+      <div class="tab-panel hidden" id="tab-clientes">
+        <div class="topbar"><div><h1>Clientes</h1><p>Clientes e os veículos de cada um</p></div><button class="btn btn-primary" id="btnNovoCliente">+ Novo cliente</button></div>
+        <div class="field search-field" style="display:flex;gap:10px;max-width:600px;flex-wrap:wrap;">
+          <input type="text" id="buscaClientes" placeholder="Buscar por nome, CPF, telefone, placa ou modelo..." style="flex:1;min-width:180px;">
+          <select id="filtroStatusClienteSelect" style="max-width:150px;">
+            <option value="">Todos</option>
+            <option value="ativo">Ativos</option>
+            <option value="inativo">Inativos</option>
+          </select>
+        </div>
+        <div id="clientesLista" class="clientes-lista"></div>
+      </div>
+
+      <div class="tab-panel hidden" id="tab-pecas">
+        <div class="topbar"><div><h1>Peças</h1><p>Estoque de peças e insumos</p></div><button class="btn btn-primary" id="btnNovaPeca">+ Nova peça</button></div>
+        <div class="field search-field"><input type="text" id="buscaPecas" placeholder="Buscar por nome da peça..."></div>
+        <div class="table-wrap"><table><thead><tr><th>Peça</th><th>Qtd. em estoque</th><th>Fornecedor</th><th>Preço venda</th><th></th></tr></thead><tbody id="pecasBody"></tbody></table></div>
+      </div>
+
+      <div class="tab-panel hidden" id="tab-fornecedores">
+        <div class="topbar"><div><h1>Fornecedores</h1><p>Contatos para reposição de peças</p></div><button class="btn btn-primary" id="btnNovoFornecedor">+ Novo fornecedor</button></div>
+        <div class="field search-field"><input type="text" id="buscaFornecedores" placeholder="Buscar por nome ou telefone..."></div>
+        <div class="table-wrap"><table><thead><tr><th>Nome</th><th>Telefone</th><th>Margem</th><th>Peças</th><th></th></tr></thead><tbody id="fornecedoresBody"></tbody></table></div>
+      </div>
+
+      <div class="tab-panel hidden" id="tab-financeiro">
+        <div class="topbar"><div><h1>Financeiro</h1><p>Fluxo de caixa da oficina</p></div><button class="btn btn-primary" id="btnNovaDespesa">+ Nova despesa</button></div>
+        <div class="agenda-nav">
+          <button class="btn btn-sm" id="mesAnteriorFinanceiro" type="button">‹</button>
+          <div class="agenda-data-label" id="mesLabelFinanceiro">Mês</div>
+          <button class="btn btn-sm" id="mesSeguinteFinanceiro" type="button">›</button>
+        </div>
+        <div class="field search-field" style="display:flex;gap:10px;max-width:420px;">
+          <select id="filtroTipoMovimentoSelect">
+            <option value="">Todos os tipos</option>
+            <option value="entrada">Somente entradas</option>
+            <option value="saida">Somente saídas</option>
+          </select>
+          <select id="filtroCategoriaMovimentoSelect">
+            <option value="">Todas as categorias</option>
+            <option value="os">Ordem de serviço</option>
+            <option value="estoque">Reposição de estoque</option>
+            <option value="aluguel">Aluguel</option>
+            <option value="energia">Energia</option>
+            <option value="agua">Água</option>
+            <option value="funcionarios">Funcionários</option>
+            <option value="outro">Outro</option>
+          </select>
+        </div>
+        <div class="stats">
+          <div class="stat-card ok"><div class="stat-num" id="statFaturamentoMes2">R$ 0,00</div><div class="stat-label">Faturamento (mês selecionado)</div></div>
+          <div class="stat-card overdue"><div class="stat-num" id="statDespesasMes2">R$ 0,00</div><div class="stat-label">Despesas (mês selecionado)</div></div>
+          <div class="stat-card"><div class="stat-num" id="statSaldoMes2">R$ 0,00</div><div class="stat-label">Saldo (mês selecionado)</div></div>
+        </div>
+        <div class="section-head"><h2>Movimentações</h2></div>
+        <div class="table-wrap"><table><thead><tr><th>Data</th><th>Tipo</th><th>Categoria</th><th>Descrição</th><th>Valor</th><th></th></tr></thead><tbody id="movimentosBody"></tbody></table></div>
+      </div>
+
+      <div class="tab-panel hidden" id="tab-funcionarios">
+        <div class="topbar"><div><h1>Funcionários</h1><p>Equipe da oficina</p></div><button class="btn btn-primary" id="btnNovoFuncionario">+ Novo funcionário</button></div>
+        <div class="field search-field"><input type="text" id="buscaFuncionarios" placeholder="Buscar por nome ou cargo..."></div>
+        <div id="funcionariosLista" class="clientes-lista"></div>
+      </div>
+
+      <div class="tab-panel hidden" id="tab-minhaoficina">
+        <div class="topbar"><div><h1>Configurações</h1><p>Dados cadastrais e assinatura da sua oficina</p></div></div>
+        <div class="table-wrap" style="max-width:420px;padding:20px;">
+          <div class="field"><label>Nome da oficina</label><input type="text" id="oficinaNome" placeholder="Ex: Oficina do João"></div>
+          <div class="field"><label>CNPJ (opcional)</label><input type="text" id="oficinaCnpj" placeholder="00.000.000/0000-00"></div>
+          <div class="field"><label>Telefone da oficina</label><input type="text" id="oficinaTelefone" placeholder="11 91234-5678"></div>
+          <button class="btn btn-primary" id="salvarOficinaBtn">Salvar</button>
+        </div>
+        <div class="section-head" style="margin-top:28px;"><h2>Assinatura</h2></div>
+        <div class="table-wrap" style="max-width:420px;padding:20px;">
+          <div class="field"><label>Plano atual</label><div id="oficinaPlanoLabel" style="font-size:15px;font-weight:600;">—</div></div>
+          <div class="field"><label>Status</label><div id="oficinaStatusLabel"><span class="tag-pill">—</span></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
 </div>
 
-<div class="tab-panel hidden" id="tab-clientes">
-<div class="topbar"><div><h1>Clientes</h1><p>Clientes e os veículos de cada um</p></div><button class="btn btn-primary" id="btnNovoCliente">+ Novo cliente</button></div>
-<div class="field search-field" style="display:flex;gap:10px;max-width:600px;flex-wrap:wrap;">
-<input type="text" id="buscaClientes" placeholder="Buscar por nome, CPF, telefone, placa ou modelo..." style="flex:1;min-width:180px;">
-<select id="filtroStatusClienteSelect" style="max-width:150px;">
-<option value="">Todos</option>
-<option value="ativo">Ativos</option>
-<option value="inativo">Inativos</option>
-</select>
-</div>
-<div id="clientesLista" class="clientes-lista"></div>
-</div>
+<!-- MODAIS -->
+<div class="overlay" id="overlayCliente"><div class="modal">
+  <h3 id="modalClienteTitle">Novo cliente</h3>
+  <input type="hidden" id="clienteId">
+  <div class="field"><label>Nome</label><input id="clienteNome" placeholder="Nome do cliente"></div>
+  <div class="field"><label>CPF</label><input id="clienteCpf" placeholder="000.000.000-00"></div>
+  <div class="field"><label>Telefone (WhatsApp, com DDD)</label><input id="clienteTelefone" placeholder="11 91234-5678"></div>
+  <div class="field"><label>E-mail (opcional)</label><input type="email" id="clienteEmail" placeholder="cliente@email.com"></div>
+  <div class="modal-actions"><button class="btn" onclick="closeModal('overlayCliente')">Cancelar</button><button class="btn btn-primary" id="salvarClienteBtn">Salvar</button></div>
+</div></div>
+
+<div class="overlay" id="overlayVeiculo"><div class="modal">
+  <h3 id="modalVeiculoTitle">Novo veículo</h3>
+  <input type="hidden" id="veiculoId">
+  <input type="hidden" id="veiculoMarcaId">
+  <input type="hidden" id="veiculoModeloId">
+  <div class="field"><label>Cliente</label><select id="veiculoCliente"></select></div>
+  <div class="field"><label>Placa</label><input id="veiculoPlaca" placeholder="ABC1D23" style="text-transform:uppercase"></div>
+  <div class="field">
+    <label>Marca</label>
+    <input type="text" id="veiculoBuscaMarca" placeholder="Digite pra buscar (ex: Toy)" autocomplete="off">
+    <div id="veiculoMarcaSugestoes" class="autocomplete-list hidden"></div>
+  </div>
+  <div class="field">
+    <label>Modelo</label>
+    <input type="text" id="veiculoBuscaModelo" placeholder="Escolha a marca primeiro" autocomplete="off" disabled>
+    <div id="veiculoModeloSugestoes" class="autocomplete-list hidden"></div>
+  </div>
+  <div style="display:flex;gap:10px;">
+    <div class="field" style="flex:1;"><label>Ano de fabricação</label><input type="number" id="veiculoAnoFabricacao" placeholder="Ex: 2020" min="1950" max="2100"></div>
+    <div class="field" style="flex:1;"><label>Ano do modelo</label><input type="number" id="veiculoAnoModelo" placeholder="Ex: 2021" min="1950" max="2100"></div>
+  </div>
+  <div class="field"><label>Data prevista da próxima revisão</label><input type="date" id="veiculoProximaRevisao"></div>
+  <div class="modal-actions"><button class="btn" onclick="closeModal('overlayVeiculo')">Cancelar</button><button class="btn btn-primary" id="salvarVeiculoBtn">Salvar</button></div>
+</div></div>
+
+<div class="overlay" id="overlayPeca"><div class="modal">
+  <h3 id="modalPecaTitle">Nova peça</h3>
+  <input type="hidden" id="pecaId">
+  <div class="field"><label>Nome da peça</label><input id="pecaNome" placeholder="Ex: Filtro de óleo"></div>
+  <div class="field"><label>Quantidade em estoque</label><input type="number" id="pecaQtd" placeholder="0"></div>
+  <div class="field"><label>Estoque mínimo (alerta)</label><input type="number" id="pecaMin" placeholder="0"></div>
+  <div class="field"><label>Preço de custo (R$)</label><input type="number" step="0.01" id="pecaCusto" placeholder="0.00"></div>
+  <div class="field"><label>Preço de venda (R$)</label><input type="number" step="0.01" id="pecaPreco" placeholder="0.00"></div>
+  <div class="field"><label>Fornecedor (opcional)</label><select id="pecaFornecedor"><option value="">Nenhum</option></select></div>
+  <div class="modal-actions"><button class="btn" onclick="closeModal('overlayPeca')">Cancelar</button><button class="btn btn-primary" id="salvarPecaBtn">Salvar</button></div>
+</div></div>
+
+<div class="overlay" id="overlayFornecedor"><div class="modal">
+  <h3 id="modalFornecedorTitle">Novo fornecedor</h3>
+  <input type="hidden" id="fornecedorId">
+  <div class="field"><label>Nome</label><input id="fornecedorNome" placeholder="Nome do fornecedor"></div>
+  <div class="field"><label>Telefone (WhatsApp, com DDD)</label><input id="fornecedorTelefone" placeholder="11 91234-5678"></div>
+  <div class="field"><label style="display:flex;align-items:center;gap:8px;"><input type="checkbox" id="fornecedorGanhaMargem" checked style="width:auto;"> Ganhar margem na revenda das peças deste fornecedor</label></div>
+  <div class="modal-actions"><button class="btn" onclick="closeModal('overlayFornecedor')">Cancelar</button><button class="btn btn-primary" id="salvarFornecedorBtn">Salvar</button></div>
+</div></div>
+
+<div class="overlay" id="overlayFuncionario"><div class="modal">
+  <h3 id="modalFuncionarioTitle">Novo funcionário</h3>
+  <input type="hidden" id="funcionarioId">
+  <div class="field"><label>Nome</label><input id="funcionarioNome" placeholder="Nome do funcionário"></div>
+  <div class="field"><label>Cargo</label><select id="funcionarioCargo">
+    <option value="Recepcionista">Recepcionista</option>
+    <option value="Mecânico">Mecânico</option>
+    <option value="Gerente">Gerente</option>
+  </select></div>
+  <div class="field"><label>Telefone (opcional)</label><input id="funcionarioTelefone" placeholder="11 91234-5678"></div>
+  <div class="modal-actions"><button class="btn" onclick="closeModal('overlayFuncionario')">Cancelar</button><button class="btn btn-primary" id="salvarFuncionarioBtn">Salvar</button></div>
+</div></div>
+
+<div class="overlay" id="overlayReporEstoque"><div class="modal">
+  <h3>Repor estoque</h3>
+  <input type="hidden" id="reporPecaId">
+  <p class="sub" id="reporPecaNomeLabel" style="margin:-6px 0 14px;color:var(--text-dim);font-size:13.5px;"></p>
+  <div class="field"><label>Quantidade a adicionar</label><input type="number" id="reporQtd" placeholder="0"></div>
+  <div class="field"><label>Custo unitário pago (R$)</label><input type="number" step="0.01" id="reporCusto" placeholder="0.00"></div>
+  <div class="modal-actions"><button class="btn" onclick="closeModal('overlayReporEstoque')">Cancelar</button><button class="btn btn-primary" id="salvarReporBtn">Salvar</button></div>
+</div></div>
+
+<div class="overlay" id="overlayDespesa"><div class="modal">
+  <h3>Nova despesa</h3>
+  <div class="field"><label>Categoria</label><select id="despesaCategoria">
+    <option value="aluguel">Aluguel</option>
+    <option value="energia">Energia</option>
+    <option value="agua">Água</option>
+    <option value="funcionarios">Funcionários</option>
+    <option value="outro">Outro</option>
+  </select></div>
+  <div class="field"><label>Descrição</label><input id="despesaDescricao" placeholder="Ex: Conta de luz de agosto"></div>
+  <div class="field"><label>Valor (R$)</label><input type="number" step="0.01" id="despesaValor" placeholder="0.00"></div>
+  <div class="field"><label>Data</label><input type="date" id="despesaData"></div>
+  <div class="modal-actions"><button class="btn" onclick="closeModal('overlayDespesa')">Cancelar</button><button class="btn btn-primary" id="salvarDespesaBtn">Salvar</button></div>
+</div></div>
+
+<div class="overlay" id="overlayOS"><div class="modal" style="max-width:560px;">
+  <h3 id="modalOSTitle">Nova ordem de serviço</h3>
+  <input type="hidden" id="osId">
+  <input type="hidden" id="osClienteId">
+  <div class="field">
+    <label>Cliente</label>
+    <input type="text" id="osBuscaCliente" placeholder="Buscar por nome, telefone ou placa..." autocomplete="off">
+    <div id="osSugestoes" class="autocomplete-list hidden"></div>
+  </div>
+  <div class="field"><label>Veículo</label><select id="osVeiculo"><option value="">Busque um cliente primeiro</option></select></div>
+  <div class="field"><label>Descrição do serviço</label><textarea id="osDescricao" rows="3" placeholder="Ex: Troca de pastilhas e revisão do sistema de freio"></textarea></div>
+
+  <div class="field">
+    <label>Peças usadas</label>
+    <div style="display:flex;gap:8px;position:relative;flex-wrap:wrap;">
+      <input type="text" id="osBuscaPeca" placeholder="Buscar peça..." autocomplete="off" style="flex:2;min-width:140px;">
+      <input type="number" id="osItemQtd" value="1" min="1" placeholder="Qtd" style="width:64px;">
+      <input type="number" id="osItemPreco" step="0.01" placeholder="Preço unit." style="width:100px;">
+      <button type="button" class="btn btn-sm" id="btnAdicionarItemOS">Adicionar</button>
+      <div id="osPecaSugestoes" class="autocomplete-list hidden"></div>
+    </div>
+    <input type="hidden" id="osItemPecaId">
+    <div id="osItensLista" style="margin-top:10px;display:flex;flex-direction:column;gap:6px;"></div>
+  </div>
+
+  <div class="field"><label>Mão de obra (R$)</label><input type="number" step="0.01" id="osMaoDeObra" placeholder="0.00"></div>
+  <div class="field"><label>Garantia da mão de obra (dias)</label><input type="number" id="osGarantiaMaoDeObra" placeholder="Ex: 90"></div>
+  <div class="field"><label>Profissional responsável</label><select id="osFuncionario"><option value="">Não informado</option></select></div>
+  <div class="field"><label>Garantia das peças (dias)</label><input type="number" id="osGarantiaPecas" placeholder="Ex: 180"></div>
+
+  <div style="text-align:right;font-size:14px;color:var(--text-dim);margin:6px 0 4px;">Total: <strong id="osTotalPreview" style="color:var(--text);">R$ 0,00</strong></div>
+
+  <div class="modal-actions"><button class="btn" onclick="closeModal('overlayOS')">Cancelar</button><button class="btn btn-primary" id="salvarOSBtn">Salvar</button></div>
+</div></div>
+
+<script src="script.js"></script>
+</body>
+</html>
