@@ -4,14 +4,11 @@ const LIMITE_AVISOS = 3;
 
 let empresaId = null;
 let empresaNome = 'a oficina';
-let data = { clientes: [], veiculos: [], pecas: [], agendamentos: [], fornecedores: [], os: [], osItens: [], movimentos: [], marcas: [], modelos: [], funcionarios: [] };
+let data = { clientes: [], veiculos: [], pecas: [], fornecedores: [], os: [], osItens: [], movimentos: [], marcas: [], modelos: [], funcionarios: [] };
 let filtroFuncionarios = '';
 let modoCadastro = false;
 let filtroClientes = '';
 let filtroStatusCliente = '';
-let filtroAgendamentos = '';
-let filtroStatusAgendamento = '';
-let filtroDataAgendamento = '';
 let filtroPecas = '';
 let filtroFornecedores = '';
 let filtroOS = '';
@@ -132,11 +129,10 @@ async function carregarDados(){
   document.getElementById('loadingState').classList.remove('hidden');
   document.getElementById('appContent').classList.add('hidden');
 
-  const [{ data: clientes }, { data: veiculos }, { data: pecas }, { data: agendamentos }, { data: fornecedores }, { data: os }, { data: osItens }, { data: movimentos }, { data: funcionarios }] = await Promise.all([
+  const [{ data: clientes }, { data: veiculos }, { data: pecas }, { data: fornecedores }, { data: os }, { data: osItens }, { data: movimentos }, { data: funcionarios }] = await Promise.all([
     sb.from('clientes').select('*').eq('empresa_id', empresaId).order('nome'),
     sb.from('veiculos').select('*').eq('empresa_id', empresaId),
     sb.from('pecas').select('*').eq('empresa_id', empresaId).order('nome'),
-    sb.from('agendamentos').select('*').eq('empresa_id', empresaId).order('data_agendamento'),
     sb.from('fornecedores').select('*').eq('empresa_id', empresaId).order('nome'),
     sb.from('ordens_servico').select('*').eq('empresa_id', empresaId).order('data', { ascending: false }),
     sb.from('os_itens').select('*'),
@@ -146,7 +142,6 @@ async function carregarDados(){
   data.clientes = clientes || [];
   data.veiculos = veiculos || [];
   data.pecas = pecas || [];
-  data.agendamentos = agendamentos || [];
   data.fornecedores = fornecedores || [];
   data.os = os || [];
   data.funcionarios = funcionarios || [];
@@ -173,10 +168,6 @@ function openModal(id){ document.getElementById(id).classList.add('show'); }
 
 document.getElementById('buscaClientes').addEventListener('input', (e)=>{ filtroClientes = e.target.value.trim().toLowerCase(); renderClientes(); });
 document.getElementById('filtroStatusClienteSelect').addEventListener('change', (e)=>{ filtroStatusCliente = e.target.value; renderClientes(); });
-document.getElementById('buscaAgendamentos').addEventListener('input', (e)=>{ filtroAgendamentos = e.target.value.trim().toLowerCase(); renderAgendamentos(); });
-document.getElementById('filtroStatusAgendamentoSelect').addEventListener('change', (e)=>{ filtroStatusAgendamento = e.target.value; renderAgendamentos(); });
-document.getElementById('filtroDataAgendamentoInput').addEventListener('change', (e)=>{ filtroDataAgendamento = e.target.value; renderAgendamentos(); });
-document.getElementById('btnLimparFiltroDataAgendamento').addEventListener('click', ()=>{ filtroDataAgendamento=''; document.getElementById('filtroDataAgendamentoInput').value=''; renderAgendamentos(); });
 document.getElementById('buscaPecas').addEventListener('input', (e)=>{ filtroPecas = e.target.value.trim().toLowerCase(); renderPecas(); });
 document.getElementById('buscaFornecedores').addEventListener('input', (e)=>{ filtroFornecedores = e.target.value.trim().toLowerCase(); renderFornecedores(); });
 document.getElementById('buscaOS').addEventListener('input', (e)=>{ filtroOS = e.target.value.trim().toLowerCase(); renderOS(); });
@@ -427,167 +418,6 @@ async function reabrirFila(veiculoId){
   await carregarDados();
 }
 
-// ---------------- AGENDAMENTOS ----------------
-document.getElementById('btnNovoAgendamento').addEventListener('click', ()=>{
-  abrirModalAgendamento();
-});
-
-function abrirModalAgendamento(clienteId, veiculoId){
-  document.getElementById('modalAgendamentoTitle').textContent = 'Novo agendamento';
-  document.getElementById('agendamentoId').value = '';
-  document.getElementById('agendamentoData').value = '';
-  document.getElementById('agendamentoHorario').value = '';
-  document.getElementById('agendamentoObservacao').value = '';
-  document.getElementById('agendamentoSugestoes').classList.add('hidden');
-  if(clienteId){
-    selecionarClienteAgendamento(clienteId);
-    if(veiculoId) document.getElementById('agendamentoVeiculo').value = veiculoId;
-  } else {
-    document.getElementById('agendamentoBuscaCliente').value = '';
-    document.getElementById('agendamentoClienteId').value = '';
-    document.getElementById('agendamentoVeiculo').innerHTML = '<option value="">Busque um cliente primeiro</option>';
-  }
-  openModal('overlayAgendamento');
-}
-
-document.getElementById('agendamentoBuscaCliente').addEventListener('input', (e)=>{
-  const termo = e.target.value.trim().toLowerCase();
-  document.getElementById('agendamentoClienteId').value = '';
-  document.getElementById('agendamentoVeiculo').innerHTML = '<option value="">Busque um cliente primeiro</option>';
-  const sugestoesEl = document.getElementById('agendamentoSugestoes');
-  if(!termo){ sugestoesEl.classList.add('hidden'); sugestoesEl.innerHTML = ''; return; }
-  const resultados = data.clientes.filter(c=>{
-    const veiculosCliente = data.veiculos.filter(v=>v.cliente_id===c.id);
-    const placas = veiculosCliente.map(v=>(v.placa||'').toLowerCase()).join(' ');
-    return c.nome.toLowerCase().includes(termo) || (c.telefone||'').toLowerCase().includes(termo) || (c.cpf||'').toLowerCase().includes(termo) || placas.includes(termo);
-  }).slice(0,8);
-  if(resultados.length===0){
-    sugestoesEl.innerHTML = `<div class="autocomplete-empty">Nenhum cliente encontrado</div>`;
-    sugestoesEl.classList.remove('hidden');
-    return;
-  }
-  sugestoesEl.innerHTML = resultados.map(c=>{
-    const nVeiculos = data.veiculos.filter(v=>v.cliente_id===c.id).length;
-    return `<div class="autocomplete-item" onclick="selecionarClienteAgendamento('${c.id}')">
-      <div class="ac-nome">${escapeHtml(c.nome)}</div>
-      <div class="ac-sub">${escapeHtml(c.telefone||'sem telefone')} · ${nVeiculos} veículo${nVeiculos===1?'':'s'}</div>
-    </div>`;
-  }).join('');
-  sugestoesEl.classList.remove('hidden');
-});
-
-function selecionarClienteAgendamento(clienteId){
-  const c = data.clientes.find(x=>x.id===clienteId);
-  if(!c) return;
-  document.getElementById('agendamentoClienteId').value = c.id;
-  document.getElementById('agendamentoBuscaCliente').value = c.nome;
-  document.getElementById('agendamentoSugestoes').classList.add('hidden');
-  const veiculosCliente = data.veiculos.filter(v=>v.cliente_id===c.id);
-  const sel = document.getElementById('agendamentoVeiculo');
-  sel.innerHTML = veiculosCliente.length===0
-    ? '<option value="">Cliente sem veículo cadastrado</option>'
-    : veiculosCliente.map(v=>`<option value="${v.id}">${escapeHtml(v.placa)} — ${escapeHtml(v.modelo)}</option>`).join('');
-}
-
-document.addEventListener('click', (e)=>{
-  const campo = document.getElementById('agendamentoBuscaCliente');
-  const sugestoes = document.getElementById('agendamentoSugestoes');
-  if(campo && sugestoes && !campo.contains(e.target) && !sugestoes.contains(e.target)){
-    sugestoes.classList.add('hidden');
-  }
-});
-
-function editAgendamento(id){
-  const a = data.agendamentos.find(x=>x.id===id);
-  if(!a) return;
-  document.getElementById('modalAgendamentoTitle').textContent = 'Editar agendamento';
-  document.getElementById('agendamentoId').value = a.id;
-  document.getElementById('agendamentoData').value = a.data_agendamento || '';
-  document.getElementById('agendamentoHorario').value = a.horario || '';
-  document.getElementById('agendamentoObservacao').value = a.observacao || '';
-  selecionarClienteAgendamento(a.cliente_id);
-  if(a.veiculo_id) document.getElementById('agendamentoVeiculo').value = a.veiculo_id;
-  openModal('overlayAgendamento');
-}
-
-document.getElementById('salvarAgendamentoBtn').addEventListener('click', async ()=>{
-  const id = document.getElementById('agendamentoId').value;
-  const cliente_id = document.getElementById('agendamentoClienteId').value;
-  const veiculo_id = document.getElementById('agendamentoVeiculo').value || null;
-  const data_agendamento = document.getElementById('agendamentoData').value;
-  const horario = document.getElementById('agendamentoHorario').value || null;
-  const observacao = document.getElementById('agendamentoObservacao').value.trim();
-  if(!cliente_id){ alert('Busque e selecione um cliente.'); return; }
-  if(!data_agendamento){ alert('Informe a data do agendamento.'); return; }
-  if(id){
-    await sb.from('agendamentos').update({ cliente_id, veiculo_id, data_agendamento, horario, observacao }).eq('id', id);
-  } else {
-    await sb.from('agendamentos').insert({ empresa_id: empresaId, cliente_id, veiculo_id, data_agendamento, horario, observacao, status: 'agendado' });
-  }
-  closeModal('overlayAgendamento');
-  await carregarDados();
-});
-
-async function marcarAgendamentoConcluido(id){
-  await sb.from('agendamentos').update({ status: 'concluido' }).eq('id', id);
-  await carregarDados();
-}
-
-async function excluirAgendamento(id){
-  if(!confirm('Excluir este agendamento?')) return;
-  await sb.from('agendamentos').delete().eq('id', id);
-  await carregarDados();
-}
-
-function renderAgendamentos(){
-  const wrap = document.getElementById('agendamentosLista');
-  const termo = filtroAgendamentos;
-  let lista = [...data.agendamentos].sort((a,b)=>(a.data_agendamento||'').localeCompare(b.data_agendamento||''));
-  if(filtroStatusAgendamento){
-    lista = lista.filter(a=>a.status === filtroStatusAgendamento);
-  }
-  if(filtroDataAgendamento){
-    lista = lista.filter(a=>a.data_agendamento === filtroDataAgendamento);
-  }
-  if(termo){
-    lista = lista.filter(a=>{
-      const cliente = data.clientes.find(c=>c.id===a.cliente_id);
-      const veiculo = data.veiculos.find(v=>v.id===a.veiculo_id);
-      return (cliente ? cliente.nome.toLowerCase().includes(termo) : false)
-        || (veiculo ? (veiculo.placa||'').toLowerCase().includes(termo) || (veiculo.modelo||'').toLowerCase().includes(termo) : false)
-        || (a.observacao||'').toLowerCase().includes(termo);
-    });
-  }
-  if(lista.length===0){
-    wrap.innerHTML = `<div class="empty-note">${termo || filtroStatusAgendamento || filtroDataAgendamento ? 'Nenhum agendamento encontrado.' : 'Nenhum agendamento cadastrado ainda.'}</div>`;
-    return;
-  }
-  wrap.innerHTML = lista.map(a=>{
-    const cliente = data.clientes.find(c=>c.id===a.cliente_id);
-    const veiculo = data.veiculos.find(v=>v.id===a.veiculo_id);
-    let dataLabel = '—';
-    if(a.data_agendamento){
-      dataLabel = new Date(a.data_agendamento+'T00:00:00').toLocaleDateString('pt-BR');
-      if(a.horario) dataLabel += ` às ${a.horario.slice(0,5)}`;
-    }
-    const concluido = a.status === 'concluido';
-    const infoPartes = [dataLabel, veiculo ? `${veiculo.placa} — ${veiculo.modelo}` : 'sem veículo', a.observacao || null].filter(Boolean);
-    return `<div class="cliente-card${concluido ? ' cliente-inativo' : ''}">
-      <div class="cliente-card-header">
-        <div>
-          <div class="cliente-card-nome">${cliente ? escapeHtml(cliente.nome) : 'Cliente não vinculado'} <span class="tag-pill ${concluido ? '' : 'ativo-pill'}">${concluido ? 'Concluído' : 'Agendado'}</span></div>
-          <div class="cliente-card-info">${infoPartes.map(escapeHtml).join(' · ')}</div>
-        </div>
-        <div class="cliente-card-acoes">
-          ${concluido ? '' : `<button class="btn btn-sm" onclick="marcarAgendamentoConcluido('${a.id}')">Concluir</button>`}
-          <button class="btn btn-ghost btn-sm" onclick="editAgendamento('${a.id}')">Editar</button>
-          <button class="btn btn-ghost btn-sm" onclick="excluirAgendamento('${a.id}')">Excluir</button>
-        </div>
-      </div>
-    </div>`;
-  }).join('');
-}
-
 // ---------------- ORDENS DE SERVICO ----------------
 document.getElementById('btnNovaOS').addEventListener('click', ()=>{
   abrirModalOS();
@@ -805,6 +635,7 @@ function totalOS(os){
 }
 
 const ETAPAS_OS = [
+  { id: 'orcamento', label: 'Orçamento' },
   { id: 'pendente', label: 'Pendente' },
   { id: 'em_andamento', label: 'Em andamento' },
   { id: 'pronto', label: 'Pronto' },
@@ -1333,7 +1164,7 @@ function waLink(telefone, mensagem){ const digits = (telefone||'').replace(/\D/g
 function formatBRL(v){ return 'R$ ' + Number(v||0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
 
 // ---------------- RENDER ----------------
-function renderAll(){ renderPainel(); renderAgendamentos(); renderClientes(); renderPecas(); renderFornecedores(); renderFuncionarios(); renderOS(); renderFinanceiro(); }
+function renderAll(){ renderPainel(); renderClientes(); renderPecas(); renderFornecedores(); renderFuncionarios(); renderOS(); renderFinanceiro(); }
 
 function painelRowHtml(v, cliente, dias, opts){
   const overdue = dias < 0;
@@ -1437,7 +1268,8 @@ async function renderPainel(){
   document.getElementById('statVencidas').textContent = vencidas.length;
   document.getElementById('statProximas').textContent = proximas.length;
   document.getElementById('statClientes').textContent = data.clientes.length;
-  document.getElementById('statAgendamentosPendentes').textContent = data.agendamentos.filter(a=>a.status==='agendado').length;
+  document.getElementById('statOSPendentes').textContent = data.os.filter(o=>o.status==='pendente' && !o.cancelada).length;
+  document.getElementById('statOSEmAndamento').textContent = data.os.filter(o=>o.status==='em_andamento' && !o.cancelada).length;
 
   renderPainelPaginado('filaVencidasProximas', 'paginacaoFila', fila, 'fila',
     ({v,cliente,dias})=>painelRowHtml(v,cliente,dias,{contatado:false}));
@@ -1495,7 +1327,6 @@ function renderClientes(){
               <span>${escapeHtml(v.modelo||'')}${anoLabel}${revisaoLabel}</span>
             </div>
             <div class="veiculo-item-acoes">
-              <button class="btn btn-ghost btn-sm" onclick="abrirModalAgendamento('${c.id}','${v.id}')">Agendar</button>
               <button class="btn btn-ghost btn-sm" onclick="abrirModalOS('${c.id}','${v.id}')">Nova OS</button>
               <button class="btn btn-ghost btn-sm" onclick="editVeiculo('${v.id}')">Editar</button>
               <button class="btn btn-ghost btn-sm" onclick="excluirVeiculo('${v.id}')">Excluir</button>
