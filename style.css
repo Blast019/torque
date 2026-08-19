@@ -1,237 +1,335 @@
-@import url('https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;700&display=swap');
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Torque — Gestão de Oficina</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
 
-:root{
-  --bg:#15171A;--surface:#1E2124;--surface-2:#262A2E;--border:#34383D;
-  --text:#F2F1EC;--text-dim:#9AA0A6;--accent:#FF6A1F;--accent-dim:#3A241A;
-  --ok:#3FA34D;--ok-dim:#1C3320;--warn:#E8B93F;--warn-dim:#3A331A;--radius:10px;
-}
-*{box-sizing:border-box;}
-body{margin:0;background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;-webkit-font-smoothing:antialiased;}
-h1,h2,h3{font-family:'Oswald',sans-serif;font-weight:600;letter-spacing:0.3px;margin:0;}
-.mono{font-family:'JetBrains Mono',monospace;}
-button{font-family:inherit;cursor:pointer;}
-input,select{font-family:inherit;}
+<!-- Configuração do Supabase -->
+<script src="config.js"></script>
 
-/* ---- LOGIN ---- */
-.auth-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;}
-.auth-card{width:100%;max-width:360px;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:28px;}
-.auth-brand{display:flex;align-items:center;gap:10px;margin-bottom:24px;}
-.brand-mark{width:34px;height:34px;border-radius:8px;background:var(--accent);display:flex;align-items:center;justify-content:center;font-family:'Oswald';font-weight:700;color:#1a0d05;font-size:16px;}
-.auth-card h1{font-size:19px;}
-.auth-card p.sub{color:var(--text-dim);font-size:13px;margin:2px 0 20px;}
-.field{margin-bottom:12px;position:relative;}
-.field label{display:block;font-size:12px;color:var(--text-dim);margin-bottom:5px;}
-.field input,.field select,.field textarea{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:7px;padding:9px 11px;color:var(--text);font-size:13.5px;font-family:inherit;}
-.field textarea{resize:vertical;min-height:64px;}
-input[type="date"],input[type="time"],input[type="datetime-local"]{
-  color-scheme: dark;
-  background-repeat: no-repeat;
-  background-position: right 10px center;
-  background-size: 18px;
-  padding-right: 36px;
-}
-input[type="date"]{
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23FF6A1F' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='4' width='18' height='18' rx='2'/%3E%3Cline x1='16' y1='2' x2='16' y2='6'/%3E%3Cline x1='8' y1='2' x2='8' y2='6'/%3E%3Cline x1='3' y1='10' x2='21' y2='10'/%3E%3C/svg%3E");
-}
-input[type="time"]{
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23FF6A1F' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='9'/%3E%3Cpolyline points='12 7 12 12 16 14'/%3E%3C/svg%3E");
-}
-input[type="date"]::-webkit-calendar-picker-indicator,
-input[type="time"]::-webkit-calendar-picker-indicator,
-input[type="datetime-local"]::-webkit-calendar-picker-indicator{
-  opacity: 0;
-  width: 22px;
-  height: 22px;
-  cursor: pointer;
-  position: relative;
-  z-index: 2;
-}
-.field input:focus,.field select:focus,.field textarea:focus{outline:none;border-color:var(--accent);}
-.search-field{max-width:340px;margin-bottom:16px;}
-.search-field input,.search-field select,input[type="date"],input[type="time"]{
-  background:var(--bg);border:1px solid var(--border);border-radius:7px;
-  padding:9px 11px;color:var(--text);font-size:13.5px;
-}
-.autocomplete-list{position:absolute;top:100%;left:0;right:0;background:var(--surface-2);border:1px solid var(--border);border-top:none;border-radius:0 0 7px 7px;max-height:230px;overflow-y:auto;z-index:20;}
-.autocomplete-item{padding:9px 11px;cursor:pointer;border-bottom:1px solid var(--border);}
-.autocomplete-item:last-child{border-bottom:none;}
-.autocomplete-item:hover{background:var(--surface);}
-.ac-nome{font-size:13.5px;font-weight:500;}
-.ac-sub{font-size:11.5px;color:var(--text-dim);margin-top:1px;}
-.autocomplete-empty{padding:9px 11px;font-size:12.5px;color:var(--text-dim);}
-.os-item-row{display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--bg);border:1px solid var(--border);border-radius:7px;padding:7px 10px;font-size:12.5px;}
-.os-item-row .os-item-remove{background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:12.5px;text-decoration:underline;padding:0;}
-.os-item-row .os-item-remove:hover{color:var(--accent);}
-.btn{border:1px solid var(--border);background:var(--surface-2);color:var(--text);padding:9px 16px;border-radius:8px;font-size:13px;font-weight:500;display:inline-flex;align-items:center;gap:6px;}
-.btn:hover{border-color:var(--text-dim);}
-.btn-primary{background:var(--accent);border-color:var(--accent);color:#1a0d05;font-weight:600;}
-.btn-primary:hover{background:#ff7a35;}
-.btn-block{width:100%;justify-content:center;}
-.auth-toggle{text-align:center;margin-top:14px;font-size:13px;color:var(--text-dim);}
-.auth-toggle a{color:var(--accent);cursor:pointer;text-decoration:none;}
-.auth-error{background:var(--accent-dim);color:var(--accent);font-size:12.5px;padding:9px 11px;border-radius:7px;margin-bottom:12px;}
+<div id="authScreen" class="auth-wrap">
+  <div class="auth-card">
+    <div class="auth-brand">
+      <div class="brand-mark">T</div>
+      <div><div class="brand-name">Torque</div><div class="brand-sub">gestão de oficina</div></div>
+    </div>
+    <h1 id="authTitle">Entrar</h1>
+    <p class="sub" id="authSub">Acesse o painel da sua oficina</p>
+    <div id="authError" class="auth-error hidden"></div>
+    <div class="field"><label>E-mail</label><input type="email" id="authEmail" placeholder="voce@oficina.com"></div>
+    <div class="field"><label>Senha</label><input type="password" id="authPassword" placeholder="Mínimo 6 caracteres"></div>
+    <div class="field hidden" id="authNomeField"><label>Nome da oficina</label><input type="text" id="authNomeOficina" placeholder="Ex: Oficina do João"></div>
+    <div class="field hidden" id="authCnpjField"><label>CNPJ (opcional)</label><input type="text" id="authCnpj" placeholder="00.000.000/0000-00"></div>
+    <div class="field hidden" id="authTelefoneField"><label>Telefone da oficina</label><input type="text" id="authTelefone" placeholder="11 91234-5678"></div>
+    <button class="btn btn-primary btn-block" id="authSubmitBtn">Entrar</button>
+    <div class="auth-toggle" id="authToggle">Ainda não tem conta? <a id="authToggleLink">Criar conta</a></div>
+  </div>
+</div>
 
-/* ---- APP LAYOUT (reaproveitado do protótipo) ---- */
-.app{display:flex;min-height:100vh;}
-.sidebar{width:220px;flex-shrink:0;background:var(--surface);border-right:1px solid var(--border);padding:24px 16px;display:flex;flex-direction:column;gap:4px;}
-.brand{display:flex;align-items:center;gap:10px;margin-bottom:28px;padding:0 8px;}
-.brand-name{font-size:19px;}
-.brand-sub{font-size:11px;color:var(--text-dim);margin-top:-2px;}
-.nav-item{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:8px;color:var(--text-dim);font-size:14px;font-weight:500;border:none;background:none;text-align:left;width:100%;}
-.nav-item:hover{background:var(--surface-2);color:var(--text);}
-.nav-item.active{background:var(--accent-dim);color:var(--accent);}
-.nav-icon{width:18px;text-align:center;}
-.sidebar-foot{margin-top:auto;padding:12px 8px;border-top:1px solid var(--border);}
-.company-pill{font-size:12px;color:var(--text-dim);display:flex;align-items:center;gap:8px;margin-bottom:10px;}
-.company-dot{width:8px;height:8px;border-radius:50%;background:var(--ok);}
-.logout-btn{font-size:12px;color:var(--text-dim);background:none;border:none;padding:0;text-decoration:underline;}
-.logout-btn:hover{color:var(--text);}
+<div id="appScreen" class="app hidden">
+  <div class="sidebar">
+    <div class="brand">
+      <div class="brand-mark">T</div>
+      <div><div class="brand-name">Torque</div><div class="brand-sub">gestão de oficina</div></div>
+    </div>
+    <button class="nav-item active" data-tab="painel"><span class="nav-icon">◈</span><span class="nav-label">Painel</span></button>
+    <button class="nav-item" data-tab="os"><span class="nav-icon">🧾</span><span class="nav-label">Ordens de Serviço</span></button>
+    <button class="nav-item" data-tab="clientes"><span class="nav-icon">☰</span><span class="nav-label">Clientes</span></button>
+    <button class="nav-item" data-tab="pecas"><span class="nav-icon">⚙</span><span class="nav-label">Peças</span></button>
+    <button class="nav-item" data-tab="fornecedores"><span class="nav-icon">☏</span><span class="nav-label">Fornecedores</span></button>
+    <button class="nav-item" data-tab="financeiro"><span class="nav-icon">💰</span><span class="nav-label">Financeiro</span></button>
+    <button class="nav-item" data-tab="funcionarios"><span class="nav-icon">👤</span><span class="nav-label">Funcionários</span></button>
+    <button class="nav-item" data-tab="minhaoficina"><span class="nav-icon">🏠</span><span class="nav-label">Configurações</span></button>
+    <div class="sidebar-foot">
+      <div class="company-pill"><div class="company-dot"></div><span id="empresaNomeLabel">—</span></div>
+      <button class="logout-btn" id="logoutBtn">Sair da conta</button>
+    </div>
+  </div>
 
-.main{flex:1;padding:32px 40px;max-width:1080px;}
-.topbar{display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:24px;}
-.topbar h1{font-size:26px;}
-.topbar p{color:var(--text-dim);font-size:14px;margin-top:4px;}
-.btn-ghost{background:none;border:none;color:var(--text-dim);padding:6px 8px;}
-.btn-ghost:hover{color:var(--text);}
-.btn-sm{padding:6px 10px;font-size:12px;}
+  <div class="main">
+    <div id="loadingState" class="loading">Carregando dados da oficina…</div>
 
-.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:28px;}
-.stat-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px 18px;display:flex;justify-content:space-between;align-items:center;gap:10px;}
-.stat-icon{font-size:22px;opacity:0.55;flex-shrink:0;}
-.stat-num{font-family:'Oswald';font-size:24px;font-weight:600;}
-.stat-label{font-size:12px;color:var(--text-dim);margin-top:2px;}
-.stat-card.overdue .stat-num{color:var(--accent);}
-.stat-card.soon .stat-num{color:var(--warn);}
-.stat-card.ok .stat-num{color:var(--ok);}
+    <div id="appContent" class="hidden">
+      <div class="tab-panel" id="tab-painel">
+        <div class="topbar"><div><h1>Painel</h1><p>Revisões que precisam de atenção agora</p></div></div>
+        <div class="stats">
+          <div class="stat-card overdue"><div><div class="stat-num" id="statVencidas">0</div><div class="stat-label">Revisões vencidas</div></div><div class="stat-icon">📈</div></div>
+          <div class="stat-card soon"><div><div class="stat-num" id="statProximas">0</div><div class="stat-label">Vencem em 30 dias</div></div><div class="stat-icon">📋</div></div>
+          <div class="stat-card ok"><div><div class="stat-num" id="statClientes">0</div><div class="stat-label">Clientes cadastrados</div></div><div class="stat-icon">👤</div></div>
+          <div class="stat-card"><div><div class="stat-num" id="statOSPendentes">0</div><div class="stat-label">OS pendentes</div></div><div class="stat-icon">🧾</div></div>
+          <div class="stat-card"><div><div class="stat-num" id="statOSEmAndamento">0</div><div class="stat-label">OS em andamento</div></div><div class="stat-icon">🔧</div></div>
+        </div>
 
-.finance-banner{background:linear-gradient(135deg,#173226,#1c2a24);border:1px solid var(--ok-dim);border-radius:var(--radius);padding:18px 22px;margin-bottom:28px;}
-.finance-banner-title{font-size:11.5px;text-transform:uppercase;letter-spacing:0.6px;color:var(--ok);margin-bottom:14px;font-weight:600;}
-.finance-banner-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;}
-.finance-item{display:flex;justify-content:space-between;align-items:center;gap:8px;}
-.finance-item-label{font-size:12.5px;color:var(--text-dim);margin-bottom:4px;}
-.finance-item-value{font-family:'JetBrains Mono';font-size:22px;font-weight:700;color:var(--text);}
-.finance-item-value.fi-ok{color:var(--ok);}
-.finance-item-value.fi-warn{color:var(--accent);}
-.finance-icon{font-size:24px;opacity:0.6;flex-shrink:0;}
-@media(max-width:760px){ .finance-banner-grid{grid-template-columns:1fr;} }
+        <div class="finance-banner">
+          <div class="finance-banner-title">Financeiro — mês atual</div>
+          <div class="finance-banner-grid">
+            <div class="finance-item"><div class="finance-item-label">Faturamento total</div><div class="finance-item-value fi-ok" id="statFaturamentoMes">R$ 0,00</div><div class="finance-icon">📊</div></div>
+            <div class="finance-item"><div class="finance-item-label">Despesas totais</div><div class="finance-item-value fi-warn" id="statDespesasMes">R$ 0,00</div><div class="finance-icon">🥧</div></div>
+            <div class="finance-item"><div class="finance-item-label">Saldo atual</div><div class="finance-item-value" id="statSaldoMes">R$ 0,00</div><div class="finance-icon">📉</div></div>
+          </div>
+        </div>
 
-.painel-table-wrap{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;}
-.painel-table-head{display:grid;grid-template-columns:1.6fr 1fr 1.4fr 1.6fr;gap:10px;padding:10px 16px;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-dim);border-bottom:1px solid var(--border);}
-.painel-row{display:grid;grid-template-columns:1.6fr 1fr 1.4fr 1.6fr;gap:10px;align-items:center;padding:12px 16px;border-bottom:1px solid var(--border);}
-.painel-row:last-child{border-bottom:none;}
-.painel-row .pr-veiculo{display:flex;align-items:center;gap:8px;}
-.painel-row .pr-veiculo-icon{font-size:16px;opacity:0.6;}
-.painel-row .pr-cliente{font-weight:600;font-size:13.5px;}
-.painel-row .pr-modelo{font-size:11.5px;color:var(--text-dim);}
-.painel-row .pr-acoes{display:flex;gap:6px;flex-wrap:wrap;}
-.painel-pagination{display:flex;justify-content:center;align-items:center;gap:8px;margin:10px 0 4px;}
-.painel-pagination button{background:var(--surface-2);border:1px solid var(--border);color:var(--text-dim);border-radius:6px;padding:4px 10px;cursor:pointer;font-size:12.5px;}
-.painel-pagination button:disabled{opacity:0.35;cursor:default;}
-.painel-pagination .pg-atual{background:var(--accent-dim);color:var(--accent);border-color:var(--accent);border-radius:6px;padding:4px 10px;font-size:12.5px;}
-@media(max-width:820px){
-  .painel-table-head{display:none;}
-  .painel-row{grid-template-columns:1fr;gap:6px;}
-}
+        <div class="section-head"><h2>Fila de revisão</h2></div>
+        <div class="painel-table-wrap">
+          <div class="painel-table-head"><div>Veículo</div><div>Placa</div><div>Status</div><div>Ações</div></div>
+          <div id="filaVencidasProximas"></div>
+        </div>
+        <div class="painel-pagination" id="paginacaoFila"></div>
 
-.tags-wrap{display:flex;flex-direction:column;gap:10px;margin-bottom:32px;}
-.tag-card{position:relative;background:var(--surface);border:1px solid var(--border);border-left:4px solid var(--accent);border-radius:8px;padding:14px 18px 14px 22px;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;}
-.tag-card.soon{border-left-color:var(--warn);}
-.tag-card.contatado{border-left-color:var(--text-dim);opacity:0.85;}
-.tag-card.sem-retorno{border-left-color:var(--border);opacity:0.7;}
-.tag-left{display:flex;align-items:center;gap:14px;}
-.plate{background:#F2F1EC;color:#15171A;border-radius:5px;padding:5px 9px;font-family:'JetBrains Mono';font-weight:700;font-size:13px;letter-spacing:1px;border-top:3px solid #2F6FE0;min-width:78px;text-align:center;}
-.tag-info .cliente{font-weight:600;font-size:14.5px;}
-.tag-info .veiculo{font-size:12.5px;color:var(--text-dim);margin-top:1px;}
-.tag-status{font-size:12px;font-weight:600;padding:4px 10px;border-radius:20px;white-space:nowrap;}
-.tag-status.overdue{background:var(--accent-dim);color:var(--accent);}
-.tag-status.soon{background:var(--warn-dim);color:var(--warn);}
-.tag-right{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
-.wa-btn{background:#1F5C3D;color:#BFF0D3;border:none;border-radius:8px;padding:8px 13px;font-size:12.5px;font-weight:600;display:flex;align-items:center;gap:6px;text-decoration:none;}
-.wa-btn:hover{background:#256F49;}
-.contato-badge{font-size:11.5px;color:var(--text-dim);white-space:nowrap;}
-.aviso-count{font-size:11px;color:var(--text-dim);background:var(--surface-2);padding:2px 8px;border-radius:20px;white-space:nowrap;}
-.btn-link{background:none;border:none;color:var(--text-dim);font-size:12px;text-decoration:underline;padding:0;}
-.btn-link:hover{color:var(--text);}
-.queue-group-label{font-size:12px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.5px;margin:18px 0 8px;}
-.queue-group-label:first-child{margin-top:0;}
-.empty-note{color:var(--text-dim);font-size:13.5px;padding:18px 4px;}
+        <div class="section-head" style="margin-top:24px;"><h2>Aguardando retorno <span style="font-weight:400;color:var(--text-dim);font-size:12.5px;">(avisado há menos de 5 dias)</span></h2></div>
+        <div class="painel-table-wrap">
+          <div class="painel-table-head"><div>Veículo</div><div>Placa</div><div>Detalhes</div><div>Ações</div></div>
+          <div id="filaAguardando"></div>
+        </div>
+        <div class="painel-pagination" id="paginacaoAguardando"></div>
 
-.section-head{display:flex;justify-content:space-between;align-items:center;margin:8px 0 14px;}
-.section-head h2{font-size:17px;}
-.agenda-nav{display:flex;align-items:center;gap:10px;margin-bottom:16px;}
-.agenda-data-label{font-family:'Oswald';font-size:15px;min-width:150px;text-align:center;text-transform:capitalize;}
-.table-wrap{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;overflow-x:auto;}
-table{width:100%;border-collapse:collapse;font-size:13.5px;}
-th{text-align:left;color:var(--text-dim);font-weight:500;font-size:11.5px;text-transform:uppercase;letter-spacing:0.5px;padding:12px 16px;border-bottom:1px solid var(--border);}
-td{padding:12px 16px;border-bottom:1px solid var(--border);}
-tr:last-child td{border-bottom:none;}
-tr:hover td{background:var(--surface-2);}
-.row-actions{display:flex;gap:4px;justify-content:flex-end;}
-.tag-pill{font-size:11px;padding:2px 8px;border-radius:20px;background:var(--surface-2);color:var(--text-dim);}
-.low-stock{color:var(--accent);font-weight:600;}
+        <div class="section-head" style="margin-top:24px;"><h2>Sem retorno <span style="font-weight:400;color:var(--text-dim);font-size:12.5px;">(3 avisos enviados, sem resposta)</span></h2></div>
+        <div class="painel-table-wrap">
+          <div class="painel-table-head"><div>Veículo</div><div>Placa</div><div>Detalhes</div><div>Ações</div></div>
+          <div id="filaSemRetorno"></div>
+        </div>
+        <div class="painel-pagination" id="paginacaoSemRetorno"></div>
+      </div>
 
-.overlay{position:fixed;inset:0;background:rgba(0,0,0,0.55);display:none;align-items:flex-start;justify-content:center;z-index:50;padding:20px;overflow-y:auto;}
-.overlay.show{display:flex;}
-.modal{background:var(--surface);border:1px solid var(--border);border-radius:12px;width:100%;max-width:420px;padding:24px;max-height:calc(100vh - 40px);overflow-y:auto;}
-.modal h3{font-size:17px;margin-bottom:16px;}
-.modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:18px;}
+      <div class="tab-panel hidden" id="tab-os">
+        <div class="topbar"><div><h1>Ordens de Serviço</h1><p>Serviços realizados, peças usadas e garantia</p></div><button class="btn btn-primary" id="btnNovaOS">+ Nova OS</button></div>
+        <div class="field search-field" style="display:flex;gap:10px;max-width:600px;flex-wrap:wrap;">
+          <input type="text" id="buscaOS" placeholder="Buscar por cliente, placa ou descrição..." style="flex:1;min-width:180px;">
+          <select id="filtroStatusOSSelect" style="max-width:150px;">
+            <option value="">Todas as etapas</option>
+            <option value="orcamento">Orçamento</option>
+            <option value="pendente">Pendente</option>
+            <option value="em_andamento">Em andamento</option>
+            <option value="pronto">Pronto</option>
+            <option value="entregue">Entregue</option>
+          </select>
+          <select id="filtroPagoOSSelect" style="max-width:150px;">
+            <option value="">Pago e pendente</option>
+            <option value="pago">Pago</option>
+            <option value="pendente">Pendente</option>
+          </select>
+          <input type="date" id="filtroDataOSInput" style="max-width:160px;">
+          <button class="btn btn-sm" id="btnLimparFiltroDataOS" type="button">Limpar data</button>
+        </div>
+        <div class="kanban-board" id="osKanban"></div>
+      </div>
 
-.hidden{display:none !important;}
-.loading{padding:60px;text-align:center;color:var(--text-dim);}
+      <div class="tab-panel hidden" id="tab-clientes">
+        <div class="topbar"><div><h1>Clientes</h1><p>Clientes e os veículos de cada um</p></div><button class="btn btn-primary" id="btnNovoCliente">+ Novo cliente</button></div>
+        <div class="field search-field" style="display:flex;gap:10px;max-width:600px;flex-wrap:wrap;">
+          <input type="text" id="buscaClientes" placeholder="Buscar por nome, CPF, telefone, placa ou modelo..." style="flex:1;min-width:180px;">
+          <select id="filtroStatusClienteSelect" style="max-width:150px;">
+            <option value="">Todos</option>
+            <option value="ativo">Ativos</option>
+            <option value="inativo">Inativos</option>
+          </select>
+        </div>
+        <div id="clientesLista" class="clientes-lista"></div>
+      </div>
 
-@media(max-width:820px){
-  .sidebar{width:70px;padding:20px 10px;}
-  .brand-name,.brand-sub,.nav-label,.company-pill span,.logout-btn{display:none;}
-  .nav-item{justify-content:center;}
-  .main{padding:20px;}
-  .stats{grid-template-columns:repeat(2,1fr);}
-}
+      <div class="tab-panel hidden" id="tab-pecas">
+        <div class="topbar"><div><h1>Peças</h1><p>Estoque de peças e insumos</p></div><button class="btn btn-primary" id="btnNovaPeca">+ Nova peça</button></div>
+        <div class="field search-field"><input type="text" id="buscaPecas" placeholder="Buscar por nome da peça..."></div>
+        <div class="table-wrap"><table><thead><tr><th>Peça</th><th>Qtd. em estoque</th><th>Fornecedor</th><th>Preço venda</th><th></th></tr></thead><tbody id="pecasBody"></tbody></table></div>
+      </div>
 
-.clientes-lista{display:flex;flex-direction:column;gap:12px;}
-.cliente-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px 20px;}
-.cliente-card-header{display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;margin-bottom:10px;}
-.cliente-card-nome{font-family:'Oswald';font-size:17px;font-weight:600;}
-.cliente-card-info{font-size:12.5px;color:var(--text-dim);margin-top:2px;}
-.cliente-card-acoes{display:flex;gap:4px;flex-wrap:wrap;}
-.veiculos-do-cliente{border-top:1px solid var(--border);padding-top:10px;margin-top:4px;display:flex;flex-direction:column;gap:6px;}
-.veiculo-item{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;padding:6px 0;}
-.veiculo-item-info{display:flex;align-items:center;gap:10px;}
-.veiculo-item-acoes{display:flex;gap:4px;}
-.sem-veiculos-note{font-size:12.5px;color:var(--text-dim);padding:4px 0;}
-.cliente-card.cliente-inativo{opacity:0.6;}
-.ativo-pill{background:var(--ok-dim);color:var(--ok);}
+      <div class="tab-panel hidden" id="tab-fornecedores">
+        <div class="topbar"><div><h1>Fornecedores</h1><p>Contatos para reposição de peças</p></div><button class="btn btn-primary" id="btnNovoFornecedor">+ Novo fornecedor</button></div>
+        <div class="field search-field"><input type="text" id="buscaFornecedores" placeholder="Buscar por nome ou telefone..."></div>
+        <div class="table-wrap"><table><thead><tr><th>Nome</th><th>Telefone</th><th>Margem</th><th>Peças</th><th></th></tr></thead><tbody id="fornecedoresBody"></tbody></table></div>
+      </div>
 
-.kanban-board{display:flex;gap:14px;align-items:start;overflow-x:auto;padding-bottom:8px;}
-.kanban-col{flex:0 0 300px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px;min-height:80px;max-height:min(85vh,1000px);overflow-y:auto;}
-.kanban-col-title{font-family:'Oswald';font-size:13px;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-dim);margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;}
-.kanban-count{background:var(--surface-2);color:var(--text-dim);font-size:11px;padding:1px 7px;border-radius:20px;}
-.kanban-toggle-btn{width:100%;justify-content:center;margin-top:4px;}
+      <div class="tab-panel hidden" id="tab-financeiro">
+        <div class="topbar"><div><h1>Financeiro</h1><p>Fluxo de caixa da oficina</p></div><button class="btn btn-primary" id="btnNovaDespesa">+ Nova despesa</button></div>
+        <div class="agenda-nav">
+          <button class="btn btn-sm" id="mesAnteriorFinanceiro" type="button">‹</button>
+          <div class="agenda-data-label" id="mesLabelFinanceiro">Mês</div>
+          <button class="btn btn-sm" id="mesSeguinteFinanceiro" type="button">›</button>
+        </div>
+        <div class="field search-field" style="display:flex;gap:10px;max-width:420px;">
+          <select id="filtroTipoMovimentoSelect">
+            <option value="">Todos os tipos</option>
+            <option value="entrada">Somente entradas</option>
+            <option value="saida">Somente saídas</option>
+          </select>
+          <select id="filtroCategoriaMovimentoSelect">
+            <option value="">Todas as categorias</option>
+            <option value="os">Ordem de serviço</option>
+            <option value="estoque">Reposição de estoque</option>
+            <option value="aluguel">Aluguel</option>
+            <option value="energia">Energia</option>
+            <option value="agua">Água</option>
+            <option value="funcionarios">Funcionários</option>
+            <option value="outro">Outro</option>
+          </select>
+        </div>
+        <div class="stats">
+          <div class="stat-card ok"><div class="stat-num" id="statFaturamentoMes2">R$ 0,00</div><div class="stat-label">Faturamento (mês selecionado)</div></div>
+          <div class="stat-card overdue"><div class="stat-num" id="statDespesasMes2">R$ 0,00</div><div class="stat-label">Despesas (mês selecionado)</div></div>
+          <div class="stat-card"><div class="stat-num" id="statSaldoMes2">R$ 0,00</div><div class="stat-label">Saldo (mês selecionado)</div></div>
+        </div>
+        <div class="section-head"><h2>Movimentações</h2></div>
+        <div class="table-wrap"><table><thead><tr><th>Data</th><th>Tipo</th><th>Categoria</th><th>Descrição</th><th>Valor</th><th></th></tr></thead><tbody id="movimentosBody"></tbody></table></div>
+      </div>
 
-/* ---- Card de OS (estilo referência) ---- */
-.os-card{background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:12px;}
-.os-card-cancelada{opacity:0.55;}
-.os-card-cliente{font-family:'Oswald';font-size:17px;font-weight:600;margin-bottom:10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
-.os-card-plate{font-size:12px;padding:3px 8px;min-width:auto;border-top-width:2px;vertical-align:middle;}
-.os-card-row{font-size:13px;color:var(--text);margin-bottom:6px;line-height:1.5;}
-.os-servicos-lista{margin:2px 0 8px 0;padding-left:26px;font-size:13px;color:var(--text-dim);}
-.os-servicos-lista li{margin-bottom:2px;}
-.os-sem-servico{font-size:12.5px;color:var(--text-dim);margin:2px 0 8px 24px;}
-.os-card-footer{display:flex;justify-content:space-between;align-items:center;margin:12px 0 12px;padding-top:10px;border-top:1px solid var(--border);flex-wrap:wrap;gap:8px;}
-.os-card-total{font-size:14px;}
-.os-card-total strong{font-family:'JetBrains Mono';color:var(--text);font-size:16px;}
-.os-status-pill{font-size:11px;font-weight:700;padding:5px 12px;border-radius:20px;letter-spacing:0.4px;}
-.os-status-pill.status-pendente-pg{background:var(--warn-dim);color:var(--warn);}
-.os-status-pill.status-pago{background:var(--ok-dim);color:var(--ok);}
-.os-status-pill.status-cancelada{background:var(--surface-2);color:var(--text-dim);}
-.os-card-actions{display:flex;flex-wrap:wrap;gap:8px;align-items:center;}
-.os-whats-btn{flex:1;min-width:140px;justify-content:center;text-align:center;font-weight:600;}
-.os-pagar-btn{flex:1;min-width:140px;justify-content:center;border:1px solid var(--ok);color:var(--ok);background:none;font-weight:600;}
-.os-pagar-btn:hover{background:var(--ok-dim);}
-.os-card-actions select{flex:1;min-width:110px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:9px;color:var(--text);font-size:12.5px;}
-.os-menu{position:static;width:100%;order:99;}
-.os-menu summary{list-style:none;cursor:pointer;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:8px 14px;font-size:16px;color:var(--text-dim);line-height:1;text-align:center;}
-.os-menu summary::-webkit-details-marker{display:none;}
-.os-menu[open] summary{color:var(--text);border-color:var(--text-dim);}
-.os-menu-items{position:static;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:6px;margin-top:8px;display:flex;flex-direction:column;gap:2px;width:100%;}
-.os-menu-items .btn{justify-content:flex-start;width:100%;}
+      <div class="tab-panel hidden" id="tab-funcionarios">
+        <div class="topbar"><div><h1>Funcionários</h1><p>Equipe da oficina</p></div><button class="btn btn-primary" id="btnNovoFuncionario">+ Novo funcionário</button></div>
+        <div class="field search-field"><input type="text" id="buscaFuncionarios" placeholder="Buscar por nome ou cargo..."></div>
+        <div id="funcionariosLista" class="clientes-lista"></div>
+      </div>
 
+      <div class="tab-panel hidden" id="tab-minhaoficina">
+        <div class="topbar"><div><h1>Configurações</h1><p>Dados cadastrais e assinatura da sua oficina</p></div></div>
+        <div class="table-wrap" style="max-width:420px;padding:20px;">
+          <div class="field"><label>Nome da oficina</label><input type="text" id="oficinaNome" placeholder="Ex: Oficina do João"></div>
+          <div class="field"><label>CNPJ (opcional)</label><input type="text" id="oficinaCnpj" placeholder="00.000.000/0000-00"></div>
+          <div class="field"><label>Telefone da oficina</label><input type="text" id="oficinaTelefone" placeholder="11 91234-5678"></div>
+          <button class="btn btn-primary" id="salvarOficinaBtn">Salvar</button>
+        </div>
+        <div class="section-head" style="margin-top:28px;"><h2>Assinatura</h2></div>
+        <div class="table-wrap" style="max-width:420px;padding:20px;">
+          <div class="field"><label>Plano atual</label><div id="oficinaPlanoLabel" style="font-size:15px;font-weight:600;">—</div></div>
+          <div class="field"><label>Status</label><div id="oficinaStatusLabel"><span class="tag-pill">—</span></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAIS -->
+<div class="overlay" id="overlayCliente"><div class="modal">
+  <h3 id="modalClienteTitle">Novo cliente</h3>
+  <input type="hidden" id="clienteId">
+  <div class="field"><label>Nome</label><input id="clienteNome" placeholder="Nome do cliente"></div>
+  <div class="field"><label>CPF</label><input id="clienteCpf" placeholder="000.000.000-00"></div>
+  <div class="field"><label>Telefone (WhatsApp, com DDD)</label><input id="clienteTelefone" placeholder="11 91234-5678"></div>
+  <div class="field"><label>E-mail (opcional)</label><input type="email" id="clienteEmail" placeholder="cliente@email.com"></div>
+  <div class="modal-actions"><button class="btn" onclick="closeModal('overlayCliente')">Cancelar</button><button class="btn btn-primary" id="salvarClienteBtn">Salvar</button></div>
+</div></div>
+
+<div class="overlay" id="overlayVeiculo"><div class="modal">
+  <h3 id="modalVeiculoTitle">Novo veículo</h3>
+  <input type="hidden" id="veiculoId">
+  <input type="hidden" id="veiculoMarcaId">
+  <input type="hidden" id="veiculoModeloId">
+  <div class="field"><label>Cliente</label><select id="veiculoCliente"></select></div>
+  <div class="field"><label>Placa</label><input id="veiculoPlaca" placeholder="ABC1D23" style="text-transform:uppercase"></div>
+  <div class="field">
+    <label>Marca</label>
+    <input type="text" id="veiculoBuscaMarca" placeholder="Digite pra buscar (ex: Toy)" autocomplete="off">
+    <div id="veiculoMarcaSugestoes" class="autocomplete-list hidden"></div>
+  </div>
+  <div class="field">
+    <label>Modelo</label>
+    <input type="text" id="veiculoBuscaModelo" placeholder="Escolha a marca primeiro" autocomplete="off" disabled>
+    <div id="veiculoModeloSugestoes" class="autocomplete-list hidden"></div>
+  </div>
+  <div style="display:flex;gap:10px;">
+    <div class="field" style="flex:1;"><label>Ano de fabricação</label><input type="number" id="veiculoAnoFabricacao" placeholder="Ex: 2020" min="1950" max="2100"></div>
+    <div class="field" style="flex:1;"><label>Ano do modelo</label><input type="number" id="veiculoAnoModelo" placeholder="Ex: 2021" min="1950" max="2100"></div>
+  </div>
+  <div class="field"><label>Data prevista da próxima revisão</label><input type="date" id="veiculoProximaRevisao"></div>
+  <div class="modal-actions"><button class="btn" onclick="closeModal('overlayVeiculo')">Cancelar</button><button class="btn btn-primary" id="salvarVeiculoBtn">Salvar</button></div>
+</div></div>
+
+<div class="overlay" id="overlayPeca"><div class="modal">
+  <h3 id="modalPecaTitle">Nova peça</h3>
+  <input type="hidden" id="pecaId">
+  <div class="field"><label>Nome da peça</label><input id="pecaNome" placeholder="Ex: Filtro de óleo"></div>
+  <div class="field"><label>Quantidade em estoque</label><input type="number" id="pecaQtd" placeholder="0"></div>
+  <div class="field"><label>Estoque mínimo (alerta)</label><input type="number" id="pecaMin" placeholder="0"></div>
+  <div class="field"><label>Preço de custo (R$)</label><input type="number" step="0.01" id="pecaCusto" placeholder="0.00"></div>
+  <div class="field"><label>Preço de venda (R$)</label><input type="number" step="0.01" id="pecaPreco" placeholder="0.00"></div>
+  <div class="field"><label>Fornecedor (opcional)</label><select id="pecaFornecedor"><option value="">Nenhum</option></select></div>
+  <div class="modal-actions"><button class="btn" onclick="closeModal('overlayPeca')">Cancelar</button><button class="btn btn-primary" id="salvarPecaBtn">Salvar</button></div>
+</div></div>
+
+<div class="overlay" id="overlayFornecedor"><div class="modal">
+  <h3 id="modalFornecedorTitle">Novo fornecedor</h3>
+  <input type="hidden" id="fornecedorId">
+  <div class="field"><label>Nome</label><input id="fornecedorNome" placeholder="Nome do fornecedor"></div>
+  <div class="field"><label>Telefone (WhatsApp, com DDD)</label><input id="fornecedorTelefone" placeholder="11 91234-5678"></div>
+  <div class="field"><label style="display:flex;align-items:center;gap:8px;"><input type="checkbox" id="fornecedorGanhaMargem" checked style="width:auto;"> Ganhar margem na revenda das peças deste fornecedor</label></div>
+  <div class="modal-actions"><button class="btn" onclick="closeModal('overlayFornecedor')">Cancelar</button><button class="btn btn-primary" id="salvarFornecedorBtn">Salvar</button></div>
+</div></div>
+
+<div class="overlay" id="overlayFuncionario"><div class="modal">
+  <h3 id="modalFuncionarioTitle">Novo funcionário</h3>
+  <input type="hidden" id="funcionarioId">
+  <div class="field"><label>Nome</label><input id="funcionarioNome" placeholder="Nome do funcionário"></div>
+  <div class="field"><label>Cargo</label><select id="funcionarioCargo">
+    <option value="Recepcionista">Recepcionista</option>
+    <option value="Mecânico">Mecânico</option>
+    <option value="Gerente">Gerente</option>
+  </select></div>
+  <div class="field"><label>Telefone (opcional)</label><input id="funcionarioTelefone" placeholder="11 91234-5678"></div>
+  <div class="modal-actions"><button class="btn" onclick="closeModal('overlayFuncionario')">Cancelar</button><button class="btn btn-primary" id="salvarFuncionarioBtn">Salvar</button></div>
+</div></div>
+
+<div class="overlay" id="overlayReporEstoque"><div class="modal">
+  <h3>Repor estoque</h3>
+  <input type="hidden" id="reporPecaId">
+  <p class="sub" id="reporPecaNomeLabel" style="margin:-6px 0 14px;color:var(--text-dim);font-size:13.5px;"></p>
+  <div class="field"><label>Quantidade a adicionar</label><input type="number" id="reporQtd" placeholder="0"></div>
+  <div class="field"><label>Custo unitário pago (R$)</label><input type="number" step="0.01" id="reporCusto" placeholder="0.00"></div>
+  <div class="modal-actions"><button class="btn" onclick="closeModal('overlayReporEstoque')">Cancelar</button><button class="btn btn-primary" id="salvarReporBtn">Salvar</button></div>
+</div></div>
+
+<div class="overlay" id="overlayDespesa"><div class="modal">
+  <h3>Nova despesa</h3>
+  <div class="field"><label>Categoria</label><select id="despesaCategoria">
+    <option value="aluguel">Aluguel</option>
+    <option value="energia">Energia</option>
+    <option value="agua">Água</option>
+    <option value="funcionarios">Funcionários</option>
+    <option value="outro">Outro</option>
+  </select></div>
+  <div class="field"><label>Descrição</label><input id="despesaDescricao" placeholder="Ex: Conta de luz de agosto"></div>
+  <div class="field"><label>Valor (R$)</label><input type="number" step="0.01" id="despesaValor" placeholder="0.00"></div>
+  <div class="field"><label>Data</label><input type="date" id="despesaData"></div>
+  <div class="modal-actions"><button class="btn" onclick="closeModal('overlayDespesa')">Cancelar</button><button class="btn btn-primary" id="salvarDespesaBtn">Salvar</button></div>
+</div></div>
+
+<div class="overlay" id="overlayOS"><div class="modal" style="max-width:560px;">
+  <h3 id="modalOSTitle">Nova ordem de serviço</h3>
+  <input type="hidden" id="osId">
+  <input type="hidden" id="osClienteId">
+  <div class="field">
+    <label>Cliente</label>
+    <input type="text" id="osBuscaCliente" placeholder="Buscar por nome, telefone ou placa..." autocomplete="off">
+    <div id="osSugestoes" class="autocomplete-list hidden"></div>
+  </div>
+  <div class="field"><label>Veículo</label><select id="osVeiculo"><option value="">Busque um cliente primeiro</option></select></div>
+  <div class="field"><label>Descrição do serviço</label><textarea id="osDescricao" rows="3" placeholder="Ex: Troca de pastilhas e revisão do sistema de freio"></textarea></div>
+
+  <div class="field">
+    <label>Peças usadas</label>
+    <div style="display:flex;gap:8px;position:relative;flex-wrap:wrap;">
+      <input type="text" id="osBuscaPeca" placeholder="Buscar peça..." autocomplete="off" style="flex:2;min-width:140px;">
+      <input type="number" id="osItemQtd" value="1" min="1" placeholder="Qtd" style="width:64px;">
+      <input type="number" id="osItemPreco" step="0.01" placeholder="Preço unit." style="width:100px;">
+      <button type="button" class="btn btn-sm" id="btnAdicionarItemOS">Adicionar</button>
+      <div id="osPecaSugestoes" class="autocomplete-list hidden"></div>
+    </div>
+    <input type="hidden" id="osItemPecaId">
+    <div id="osItensLista" style="margin-top:10px;display:flex;flex-direction:column;gap:6px;"></div>
+  </div>
+
+  <div class="field"><label>Mão de obra (R$)</label><input type="number" step="0.01" id="osMaoDeObra" placeholder="0.00"></div>
+  <div class="field"><label>Garantia da mão de obra (dias)</label><input type="number" id="osGarantiaMaoDeObra" placeholder="Ex: 90"></div>
+  <div class="field"><label>Profissional responsável</label><select id="osFuncionario"><option value="">Não informado</option></select></div>
+  <div class="field"><label>Garantia das peças (dias)</label><input type="number" id="osGarantiaPecas" placeholder="Ex: 180"></div>
+
+  <div style="text-align:right;font-size:14px;color:var(--text-dim);margin:6px 0 4px;">Total: <strong id="osTotalPreview" style="color:var(--text);">R$ 0,00</strong></div>
+
+  <div class="modal-actions"><button class="btn" onclick="closeModal('overlayOS')">Cancelar</button><button class="btn btn-primary" id="salvarOSBtn">Salvar</button></div>
+</div></div>
+
+<script src="script.js"></script>
+</body>
+</html>
