@@ -38,7 +38,6 @@
       <div><div class="brand-name">Torque</div><div class="brand-sub">gestão de oficina</div></div>
     </div>
     <button class="nav-item active" data-tab="painel"><span class="nav-icon">◈</span><span class="nav-label">Painel</span></button>
-    <button class="nav-item" data-tab="agendamentos"><span class="nav-icon">🗓</span><span class="nav-label">Agendamentos</span></button>
     <button class="nav-item" data-tab="os"><span class="nav-icon">🧾</span><span class="nav-label">Ordens de Serviço</span></button>
     <button class="nav-item" data-tab="clientes"><span class="nav-icon">☰</span><span class="nav-label">Clientes</span></button>
     <button class="nav-item" data-tab="pecas"><span class="nav-icon">⚙</span><span class="nav-label">Peças</span></button>
@@ -62,7 +61,8 @@
           <div class="stat-card overdue"><div><div class="stat-num" id="statVencidas">0</div><div class="stat-label">Revisões vencidas</div></div><div class="stat-icon">📈</div></div>
           <div class="stat-card soon"><div><div class="stat-num" id="statProximas">0</div><div class="stat-label">Vencem em 30 dias</div></div><div class="stat-icon">📋</div></div>
           <div class="stat-card ok"><div><div class="stat-num" id="statClientes">0</div><div class="stat-label">Clientes cadastrados</div></div><div class="stat-icon">👤</div></div>
-          <div class="stat-card"><div><div class="stat-num" id="statAgendamentosPendentes">0</div><div class="stat-label">Agendamentos pendentes</div></div><div class="stat-icon">📅</div></div>
+          <div class="stat-card"><div><div class="stat-num" id="statOSPendentes">0</div><div class="stat-label">OS pendentes</div></div><div class="stat-icon">🧾</div></div>
+          <div class="stat-card"><div><div class="stat-num" id="statOSEmAndamento">0</div><div class="stat-label">OS em andamento</div></div><div class="stat-icon">🔧</div></div>
         </div>
 
         <div class="finance-banner">
@@ -96,27 +96,13 @@
         <div class="painel-pagination" id="paginacaoSemRetorno"></div>
       </div>
 
-      <div class="tab-panel hidden" id="tab-agendamentos">
-        <div class="topbar"><div><h1>Agendamentos</h1><p>Serviços marcados e motivo da visita</p></div><button class="btn btn-primary" id="btnNovoAgendamento">+ Novo agendamento</button></div>
-        <div class="field search-field" style="display:flex;gap:10px;max-width:520px;flex-wrap:wrap;">
-          <input type="text" id="buscaAgendamentos" placeholder="Buscar por cliente, placa ou observação..." style="flex:1;min-width:180px;">
-          <select id="filtroStatusAgendamentoSelect" style="max-width:160px;">
-            <option value="">Todos os status</option>
-            <option value="agendado">Agendado</option>
-            <option value="concluido">Concluído</option>
-          </select>
-          <input type="date" id="filtroDataAgendamentoInput" style="max-width:160px;">
-          <button class="btn btn-sm" id="btnLimparFiltroDataAgendamento" type="button">Limpar data</button>
-        </div>
-        <div id="agendamentosLista" class="clientes-lista"></div>
-      </div>
-
       <div class="tab-panel hidden" id="tab-os">
         <div class="topbar"><div><h1>Ordens de Serviço</h1><p>Serviços realizados, peças usadas e garantia</p></div><button class="btn btn-primary" id="btnNovaOS">+ Nova OS</button></div>
         <div class="field search-field" style="display:flex;gap:10px;max-width:600px;flex-wrap:wrap;">
           <input type="text" id="buscaOS" placeholder="Buscar por cliente, placa ou descrição..." style="flex:1;min-width:180px;">
           <select id="filtroStatusOSSelect" style="max-width:150px;">
             <option value="">Todas as etapas</option>
+            <option value="orcamento">Orçamento</option>
             <option value="pendente">Pendente</option>
             <option value="em_andamento">Em andamento</option>
             <option value="pronto">Pronto</option>
@@ -307,22 +293,6 @@
   <div class="field"><label>Valor (R$)</label><input type="number" step="0.01" id="despesaValor" placeholder="0.00"></div>
   <div class="field"><label>Data</label><input type="date" id="despesaData"></div>
   <div class="modal-actions"><button class="btn" onclick="closeModal('overlayDespesa')">Cancelar</button><button class="btn btn-primary" id="salvarDespesaBtn">Salvar</button></div>
-</div></div>
-
-<div class="overlay" id="overlayAgendamento"><div class="modal">
-  <h3 id="modalAgendamentoTitle">Novo agendamento</h3>
-  <input type="hidden" id="agendamentoId">
-  <input type="hidden" id="agendamentoClienteId">
-  <div class="field">
-    <label>Cliente</label>
-    <input type="text" id="agendamentoBuscaCliente" placeholder="Buscar por nome, telefone ou placa..." autocomplete="off">
-    <div id="agendamentoSugestoes" class="autocomplete-list hidden"></div>
-  </div>
-  <div class="field"><label>Veículo</label><select id="agendamentoVeiculo"><option value="">Busque um cliente primeiro</option></select></div>
-  <div class="field"><label>Data</label><input type="date" id="agendamentoData"></div>
-  <div class="field"><label>Horário (opcional)</label><input type="time" id="agendamentoHorario"></div>
-  <div class="field"><label>Observação (motivo da visita)</label><textarea id="agendamentoObservacao" rows="3" placeholder="Ex: Carro falhando ao frear"></textarea></div>
-  <div class="modal-actions"><button class="btn" onclick="closeModal('overlayAgendamento')">Cancelar</button><button class="btn btn-primary" id="salvarAgendamentoBtn">Salvar</button></div>
 </div></div>
 
 <div class="overlay" id="overlayOS"><div class="modal" style="max-width:560px;">
