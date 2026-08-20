@@ -1477,4 +1477,19 @@ function renderPecas(){
   }).join('');
 }
 
+// ---------------- BARRA LATERAL ----------------
+const sidebarEl = document.getElementById('sidebar');
+const btnToggleSidebar = document.getElementById('btnToggleSidebar');
+function aplicarEstadoSidebar(recolhida){
+  sidebarEl.classList.toggle('collapsed', recolhida);
+  btnToggleSidebar.textContent = recolhida ? '›' : '‹';
+  btnToggleSidebar.title = recolhida ? 'Expandir menu' : 'Recolher menu';
+}
+aplicarEstadoSidebar(localStorage.getItem('torque_sidebar_recolhida') === '1');
+btnToggleSidebar.addEventListener('click', ()=>{
+  const recolhida = !sidebarEl.classList.contains('collapsed');
+  aplicarEstadoSidebar(recolhida);
+  localStorage.setItem('torque_sidebar_recolhida', recolhida ? '1' : '0');
+});
+
 checkSessaoExistente();
