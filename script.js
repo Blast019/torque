@@ -184,8 +184,24 @@ document.getElementById('btnNovoCliente').addEventListener('click', ()=>{
   document.getElementById('clienteCpf').value = '';
   document.getElementById('clienteTelefone').value = '';
   document.getElementById('clienteEmail').value = '';
+  limparCampoVeiculoDoCliente();
+  document.getElementById('clienteVeiculoSection').classList.remove('hidden');
   openModal('overlayCliente');
 });
+
+function limparCampoVeiculoDoCliente(){
+  document.getElementById('clienteVeiculoPlaca').value = '';
+  document.getElementById('clienteVeiculoBuscaMarca').value = '';
+  document.getElementById('clienteVeiculoBuscaModelo').value = '';
+  document.getElementById('clienteVeiculoMarcaId').value = '';
+  document.getElementById('clienteVeiculoModeloId').value = '';
+  document.getElementById('clienteVeiculoAnoFabricacao').value = '';
+  document.getElementById('clienteVeiculoAnoModelo').value = '';
+  document.getElementById('clienteVeiculoProximaRevisao').value = '';
+  const campoModelo = document.getElementById('clienteVeiculoBuscaModelo');
+  campoModelo.disabled = true;
+  campoModelo.placeholder = 'Escolha a marca primeiro';
+}
 
 function editCliente(id){
   const c = data.clientes.find(x=>x.id===id);
@@ -196,8 +212,75 @@ function editCliente(id){
   document.getElementById('clienteCpf').value = c.cpf || '';
   document.getElementById('clienteTelefone').value = c.telefone || '';
   document.getElementById('clienteEmail').value = c.email || '';
+  document.getElementById('clienteVeiculoSection').classList.add('hidden');
   openModal('overlayCliente');
 }
+
+// ---- autocomplete de marca/modelo dentro do modal de Novo cliente ----
+document.getElementById('clienteVeiculoBuscaMarca').addEventListener('input', (e)=>{
+  const termo = e.target.value.trim().toLowerCase();
+  document.getElementById('clienteVeiculoMarcaId').value = '';
+  document.getElementById('clienteVeiculoModeloId').value = '';
+  document.getElementById('clienteVeiculoBuscaModelo').value = '';
+  document.getElementById('clienteVeiculoBuscaModelo').disabled = true;
+  document.getElementById('clienteVeiculoBuscaModelo').placeholder = 'Escolha a marca primeiro';
+  const sugEl = document.getElementById('clienteVeiculoMarcaSugestoes');
+  if(!termo){ sugEl.classList.add('hidden'); sugEl.innerHTML=''; return; }
+  const resultados = data.marcas.filter(m=>m.nome.toLowerCase().includes(termo)).slice(0,10);
+  if(resultados.length===0){
+    sugEl.innerHTML = `<div class="autocomplete-empty">Nenhuma marca encontrada</div>`;
+    sugEl.classList.remove('hidden');
+    return;
+  }
+  sugEl.innerHTML = resultados.map(m=>`<div class="autocomplete-item" onclick="selecionarMarcaClienteVeiculo('${m.id}')"><div class="ac-nome">${escapeHtml(m.nome)}</div></div>`).join('');
+  sugEl.classList.remove('hidden');
+});
+
+function selecionarMarcaClienteVeiculo(marcaId){
+  const m = data.marcas.find(x=>x.id===marcaId);
+  if(!m) return;
+  document.getElementById('clienteVeiculoMarcaId').value = m.id;
+  document.getElementById('clienteVeiculoBuscaMarca').value = m.nome;
+  document.getElementById('clienteVeiculoMarcaSugestoes').classList.add('hidden');
+  const campoModelo = document.getElementById('clienteVeiculoBuscaModelo');
+  campoModelo.disabled = false;
+  campoModelo.placeholder = 'Digite pra buscar o modelo';
+  campoModelo.value = '';
+  document.getElementById('clienteVeiculoModeloId').value = '';
+}
+
+document.getElementById('clienteVeiculoBuscaModelo').addEventListener('input', (e)=>{
+  const termo = e.target.value.trim().toLowerCase();
+  const marcaId = document.getElementById('clienteVeiculoMarcaId').value;
+  document.getElementById('clienteVeiculoModeloId').value = '';
+  const sugEl = document.getElementById('clienteVeiculoModeloSugestoes');
+  if(!termo || !marcaId){ sugEl.classList.add('hidden'); sugEl.innerHTML=''; return; }
+  const resultados = data.modelos.filter(mo=>mo.marca_id===marcaId && mo.nome.toLowerCase().includes(termo)).slice(0,10);
+  if(resultados.length===0){
+    sugEl.innerHTML = `<div class="autocomplete-empty">Nenhum modelo encontrado — pode digitar manualmente</div>`;
+    sugEl.classList.remove('hidden');
+    return;
+  }
+  sugEl.innerHTML = resultados.map(mo=>`<div class="autocomplete-item" onclick="selecionarModeloClienteVeiculo('${mo.id}')"><div class="ac-nome">${escapeHtml(mo.nome)}</div></div>`).join('');
+  sugEl.classList.remove('hidden');
+});
+
+function selecionarModeloClienteVeiculo(modeloId){
+  const mo = data.modelos.find(x=>x.id===modeloId);
+  if(!mo) return;
+  document.getElementById('clienteVeiculoModeloId').value = mo.id;
+  document.getElementById('clienteVeiculoBuscaModelo').value = mo.nome;
+  document.getElementById('clienteVeiculoModeloSugestoes').classList.add('hidden');
+}
+
+document.addEventListener('click', (e)=>{
+  const campoM = document.getElementById('clienteVeiculoBuscaMarca');
+  const sugM = document.getElementById('clienteVeiculoMarcaSugestoes');
+  if(campoM && sugM && !campoM.contains(e.target) && !sugM.contains(e.target)){ sugM.classList.add('hidden'); }
+  const campoMo = document.getElementById('clienteVeiculoBuscaModelo');
+  const sugMo = document.getElementById('clienteVeiculoModeloSugestoes');
+  if(campoMo && sugMo && !campoMo.contains(e.target) && !sugMo.contains(e.target)){ sugMo.classList.add('hidden'); }
+});
 
 document.getElementById('salvarClienteBtn').addEventListener('click', async ()=>{
   const id = document.getElementById('clienteId').value;
@@ -210,8 +293,25 @@ document.getElementById('salvarClienteBtn').addEventListener('click', async ()=>
     const { error } = await sb.from('clientes').update({ nome, cpf, telefone, email }).eq('id', id);
     if(error){ alert('Erro ao salvar cliente: ' + error.message); return; }
   } else {
-    const { error } = await sb.from('clientes').insert({ empresa_id: empresaId, nome, cpf, telefone, email });
+    const { data: novoCliente, error } = await sb.from('clientes').insert({ empresa_id: empresaId, nome, cpf, telefone, email }).select();
     if(error){ alert('Erro ao salvar cliente: ' + error.message); return; }
+    const novoClienteId = novoCliente && novoCliente[0] ? novoCliente[0].id : null;
+
+    const placa = document.getElementById('clienteVeiculoPlaca').value.trim().toUpperCase();
+    const modelo = document.getElementById('clienteVeiculoBuscaModelo').value.trim();
+    if(novoClienteId && placa && modelo){
+      const marca_id = document.getElementById('clienteVeiculoMarcaId').value || null;
+      const modelo_id = document.getElementById('clienteVeiculoModeloId').value || null;
+      const ano_fabricacao = parseInt(document.getElementById('clienteVeiculoAnoFabricacao').value) || null;
+      const ano_modelo = parseInt(document.getElementById('clienteVeiculoAnoModelo').value) || null;
+      const proxima_revisao = document.getElementById('clienteVeiculoProximaRevisao').value || null;
+      const { error: errVeiculo } = await sb.from('veiculos').insert({
+        empresa_id: empresaId, cliente_id: novoClienteId, placa, modelo, marca_id, modelo_id, ano_fabricacao, ano_modelo, proxima_revisao
+      });
+      if(errVeiculo){ alert('Cliente salvo, mas houve um erro ao salvar o veículo: ' + errVeiculo.message); closeModal('overlayCliente'); await carregarDados(); return; }
+    } else if(novoClienteId && (placa || modelo) && !(placa && modelo)){
+      alert('Cliente salvo! Só não deu pra salvar o veículo: informe placa e modelo juntos, ou deixe os dois em branco.');
+    }
   }
   closeModal('overlayCliente');
   await carregarDados();
