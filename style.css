@@ -202,11 +202,7 @@ tr:hover td{background:var(--surface-2);}
 .ativo-pill{background:var(--ok-dim);color:var(--ok);}
 
 .kanban-board{display:flex;gap:14px;align-items:start;overflow-x:auto;padding-bottom:8px;}
-.kanban-col{flex:0 0 300px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px;min-height:80px;max-height:min(85vh,1000px);overflow-y:auto;}
-@media(min-width:900px){
-  .kanban-board{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));overflow-x:visible;}
-  .kanban-col{flex:none;}
-}
+.kanban-col{flex:1 1 260px;min-width:260px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px;min-height:80px;max-height:min(85vh,1000px);overflow-y:auto;}
 .kanban-col-title{font-family:'Oswald';font-size:13px;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-dim);margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;}
 .kanban-count{background:var(--surface-2);color:var(--text-dim);font-size:11px;padding:1px 7px;border-radius:20px;}
 .kanban-toggle-btn{width:100%;justify-content:center;margin-top:4px;}
