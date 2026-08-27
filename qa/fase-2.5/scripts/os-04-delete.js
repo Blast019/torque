@@ -1,0 +1,73 @@
+// QA Fase 2.5.1 (Ordens de Serviço) - teste funcional de DELETE.
+// Testa DELETE em ordens_servico e depois verifica (com a conta admin) se o
+// registro ainda existe, confirmando exclusão real ou bloqueio.
+// Valida "os_delete_usuario_gestor" (usuario_pode_excluir_empresa:
+// proprietario/admin/gerente podem, usuario NÃO pode).
+//
+// Rodar:
+//   SUPABASE_TEST_EMAIL=<e-mail do usuario> \
+//   TARGET_OS_ID=<uuid> node --env-file=qa/.env qa/fase-2.5/scripts/os-04-delete.js
+
+const { SUPABASE_URL, SUPABASE_ANON_KEY, SENHA_QA, EMAIL_PROPRIETARIO, EMAIL_ADMIN, EMAIL_USUARIO, EMAIL_SEM_VINCULO, EMAIL_PROPRIETARIO_ANTIGO } = require('./qa-env');
+
+async function login(email, password) {
+  const resp = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
+    method: 'POST',
+    headers: { apikey: SUPABASE_ANON_KEY, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password }),
+  });
+  const data = await resp.json();
+  if (!resp.ok) {
+    console.error('Falha no login:', data);
+    process.exit(1);
+  }
+  return data;
+}
+
+async function main() {
+  const email = process.env.SUPABASE_TEST_EMAIL;
+  const password = process.env.SUPABASE_TEST_PASSWORD;
+  const targetId = process.env.TARGET_OS_ID;
+
+  if (!email || !password || !targetId) {
+    console.error('Defina SUPABASE_TEST_EMAIL, SUPABASE_TEST_PASSWORD e TARGET_OS_ID.');
+    process.exit(1);
+  }
+
+  console.log(`\n== Login: ${email} ==`);
+  const loginData = await login(email, password);
+  console.log('Login OK. user_id =', loginData.user?.id);
+
+  console.log(`\n== DELETE ordens_servico id=${targetId} ==`);
+  const delResp = await fetch(`${SUPABASE_URL}/rest/v1/ordens_servico?id=eq.${targetId}`, {
+    method: 'DELETE',
+    headers: {
+      apikey: SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${loginData.access_token}`,
+      Prefer: 'return=representation',
+    },
+  });
+  let delData = null;
+  try { delData = await delResp.json(); } catch (e) { /* corpo vazio */ }
+  console.log('HTTP status:', delResp.status);
+  console.log('Resposta:', JSON.stringify(delData, null, 2));
+
+  const adminLogin = await login(EMAIL_ADMIN, SENHA_QA);
+  const checkResp = await fetch(`${SUPABASE_URL}/rest/v1/ordens_servico?id=eq.${targetId}&select=id,descricao`, {
+    headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${adminLogin.access_token}` },
+  });
+  const checkData = await checkResp.json();
+
+  console.log('\n== Verificação (via admin) ==');
+  if (checkData.length === 0) {
+    console.log('✅ Registro NÃO existe mais -> exclusão efetivada.');
+  } else {
+    console.log('⚠️ Registro AINDA existe -> exclusão não ocorreu (esperado para o papel usuario / sem_vinculo).');
+    console.log(JSON.stringify(checkData, null, 2));
+  }
+}
+
+main().catch((err) => {
+  console.error('Erro inesperado:', err);
+  process.exit(1);
+});

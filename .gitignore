@@ -1,0 +1,7 @@
+# Segredos e credenciais reais - nunca versionar.
+# Arquivos .env.example (sem valores reais) continuam versionados normalmente,
+# em qualquer nível do repositório.
+.env
+.env.*
+!.env.example
+!.env.*.example
