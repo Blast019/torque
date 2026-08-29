@@ -31,6 +31,35 @@
   </div>
 </div>
 
+<!-- Fase 3 — estados de resolução de contexto da empresa (resolvendo,
+     erro técnico, sem vínculo, finalizando cadastro, conta inconsistente,
+     criação não permitida) -->
+<div id="estadoContextoScreen" class="auth-wrap hidden">
+  <div class="auth-card">
+    <div class="auth-brand">
+      <div class="brand-mark">T</div>
+      <div><div class="brand-name">Torque.Tec</div><div class="brand-sub">Gestão que move seu negócio</div></div>
+    </div>
+    <h1 id="estadoContextoTitulo"></h1>
+    <p class="sub" id="estadoContextoMensagem"></p>
+    <div id="estadoContextoAcoes" class="estado-contexto-acoes"></div>
+  </div>
+</div>
+
+<!-- Fase 3 — seleção de empresa (múltiplos vínculos) -->
+<div id="seletorEmpresaScreen" class="auth-wrap hidden">
+  <div class="auth-card">
+    <div class="auth-brand">
+      <div class="brand-mark">T</div>
+      <div><div class="brand-name">Torque.Tec</div><div class="brand-sub">Gestão que move seu negócio</div></div>
+    </div>
+    <h1>Selecionar empresa</h1>
+    <p class="sub">Sua conta está vinculada a mais de uma empresa. Escolha qual deseja acessar.</p>
+    <div id="seletorEmpresaLista" class="seletor-empresa-lista"></div>
+    <button type="button" class="btn btn-block seletor-empresa-nova-btn" id="novaEmpresaSeletorBtn">+ Nova empresa</button>
+  </div>
+</div>
+
 <div id="appScreen" class="app hidden">
   <div class="sidebar" id="sidebar">
     <button class="sidebar-toggle" id="btnToggleSidebar" title="Recolher menu">‹</button>
@@ -47,7 +76,7 @@
     <button class="nav-item" data-tab="funcionarios"><span class="nav-icon">👤</span><span class="nav-label">Funcionários</span></button>
     <button class="nav-item" data-tab="minhaoficina"><span class="nav-icon">🏠</span><span class="nav-label">Configurações</span></button>
     <div class="sidebar-foot">
-      <div class="company-pill"><div class="company-dot"></div><span id="empresaNomeLabel">—</span></div>
+      <div class="company-pill"><div class="company-dot"></div><span id="empresaNomeLabel">—</span><button class="trocar-empresa-btn hidden" id="trocarEmpresaBtn" type="button" title="Trocar empresa" aria-label="Trocar empresa"><span class="trocar-empresa-icon" aria-hidden="true">⇄</span><span class="trocar-empresa-label">Trocar</span></button></div>
       <button class="logout-btn" id="logoutBtn">Sair da conta</button>
     </div>
   </div>
@@ -196,6 +225,11 @@
         <div class="table-wrap" style="max-width:420px;padding:20px;">
           <div class="field"><label>Plano atual</label><div id="oficinaPlanoLabel" style="font-size:15px;font-weight:600;">—</div></div>
           <div class="field"><label>Status</label><div id="oficinaStatusLabel"><span class="tag-pill">—</span></div></div>
+        </div>
+        <div class="section-head section-empresas-head"><h2>Minhas empresas</h2></div>
+        <div class="table-wrap section-empresas-wrap">
+          <div id="minhasEmpresasLista" class="minhas-empresas-lista"></div>
+          <button type="button" class="btn btn-primary" id="novaEmpresaConfigBtn">+ Nova empresa</button>
         </div>
       </div>
     </div>
@@ -352,6 +386,18 @@
   <div style="text-align:right;font-size:14px;color:var(--text-dim);margin:6px 0 4px;">Total: <strong id="osTotalPreview" style="color:var(--text);">R$ 0,00</strong></div>
 
   <div class="modal-actions"><button class="btn" onclick="closeModal('overlayOS')">Cancelar</button><button class="btn btn-primary" id="salvarOSBtn">Salvar</button></div>
+</div></div>
+
+<div class="overlay" id="overlayNovaEmpresa"><div class="modal modal-nova-empresa">
+  <h3>Nova empresa</h3>
+  <div id="novaEmpresaError" class="auth-error hidden"></div>
+  <div class="field"><label>Nome da empresa</label><input type="text" id="novaEmpresaNome" placeholder="Ex: Oficina do João"></div>
+  <div class="field"><label>CNPJ (opcional)</label><input type="text" id="novaEmpresaCnpj" placeholder="00.000.000/0000-00"></div>
+  <div class="field"><label>Telefone (opcional)</label><input type="text" id="novaEmpresaTelefone" placeholder="11 91234-5678"></div>
+  <div class="modal-actions">
+    <button type="button" class="btn" id="novaEmpresaCancelarBtn">Cancelar</button>
+    <button type="button" class="btn btn-primary" id="novaEmpresaSubmitBtn">Criar empresa</button>
+  </div>
 </div></div>
 
 <script src="script.js"></script>

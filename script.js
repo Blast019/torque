@@ -4,6 +4,9 @@ const LIMITE_AVISOS = 3;
 
 let empresaId = null;
 let empresaNome = 'a oficina';
+let contextoEmpresa = null;
+let vinculosAtivosAtual = [];
+let inicializandoApp = false;
 let data = { clientes: [], veiculos: [], pecas: [], fornecedores: [], os: [], osItens: [], movimentos: [], marcas: [], modelos: [], funcionarios: [] };
 let filtroFuncionarios = '';
 let modoCadastro = false;
@@ -24,7 +27,7 @@ let filtroTipoMovimento = '';
 let filtroCategoriaMovimento = '';
 
 // ---------------- AUTH ----------------
-document.getElementById('authToggleLink').addEventListener('click', ()=>{
+function alternarModoAuth(){
   modoCadastro = !modoCadastro;
   document.getElementById('authTitle').textContent = modoCadastro ? 'Criar conta' : 'Entrar';
   document.getElementById('authSub').textContent = modoCadastro ? 'Cadastre sua oficina no Torque' : 'Acesse o painel da sua oficina';
@@ -35,9 +38,13 @@ document.getElementById('authToggleLink').addEventListener('click', ()=>{
   document.getElementById('authToggle').innerHTML = modoCadastro
     ? 'Já tem conta? <a id="authToggleLink2">Entrar</a>'
     : 'Ainda não tem conta? <a id="authToggleLink">Criar conta</a>';
-  const link2 = document.getElementById('authToggleLink2');
-  if(link2) link2.addEventListener('click', ()=>document.getElementById('authToggleLink').click());
-});
+  // O innerHTML acima destrói o link anterior e cria um novo — reanexar a
+  // mesma função ao link recém-criado, em vez de tentar clicar num nó que
+  // já não existe mais (causa do TypeError anterior).
+  const novoLink = document.getElementById(modoCadastro ? 'authToggleLink2' : 'authToggleLink');
+  if(novoLink) novoLink.addEventListener('click', alternarModoAuth);
+}
+document.getElementById('authToggleLink').addEventListener('click', alternarModoAuth);
 
 document.getElementById('authSubmitBtn').addEventListener('click', async ()=>{
   const email = document.getElementById('authEmail').value.trim();
@@ -51,12 +58,24 @@ document.getElementById('authSubmitBtn').addEventListener('click', async ()=>{
   if(!email || !password){ showAuthError('Preencha e-mail e senha.'); return; }
 
   if(modoCadastro){
-    const { data: signData, error } = await sb.auth.signUp({ email, password });
+    // A criação da empresa não acontece mais aqui: signUp só grava os dados
+    // como "pendentes" em user_metadata. A criação real (empresa + vínculo
+    // proprietario) é feita pela RPC criar_empresa_com_vinculo, chamada por
+    // iniciarApp() assim que existir uma sessão autenticada de verdade
+    // (logo abaixo, ou no primeiro login pós-confirmação de e-mail).
+    const { data: signData, error } = await sb.auth.signUp({
+      email,
+      password,
+      options: {
+        data: {
+          pending_empresa: true,
+          pending_empresa_nome: nomeOficina || 'Minha oficina',
+          pending_empresa_cnpj: cnpjOficina || null,
+          pending_empresa_telefone: telefoneOficina || null
+        }
+      }
+    });
     if(error){ showAuthError(error.message); return; }
-    // cria a empresa vinculada ao novo usuário
-    if(signData.user){
-      await sb.from('empresas').insert({ owner_id: signData.user.id, nome: nomeOficina || 'Minha oficina', cnpj: cnpjOficina, telefone: telefoneOficina });
-    }
     if(!signData.session){
       showAuthError('Conta criada! Verifique seu e-mail para confirmar antes de entrar.');
       return;
@@ -75,9 +94,22 @@ function showAuthError(msg){
   el.classList.remove('hidden');
 }
 
-document.getElementById('logoutBtn').addEventListener('click', async ()=>{
+async function sairDaConta(){
+  // Não apaga nenhuma chave do localStorage: a última empresa escolhida
+  // (torque_empresa_ativa:{usuarioId}) fica preservada para restaurar a
+  // escolha no próximo login dessa mesma conta.
   await sb.auth.signOut();
   location.reload();
+}
+
+document.getElementById('logoutBtn').addEventListener('click', sairDaConta);
+
+document.getElementById('trocarEmpresaBtn').addEventListener('click', ()=>{
+  if(!contextoEmpresa || vinculosAtivosAtual.length <= 1) return;
+  // Reusa a lista de vínculos já carregada no boot — não repete a consulta.
+  mostrarSeletorEmpresa(vinculosAtivosAtual, (vinculoEscolhido)=>{
+    persistirEscolhaERecarregar(contextoEmpresa.usuarioId, vinculoEscolhido.empresa_id);
+  });
 });
 
 async function checkSessaoExistente(){
@@ -85,32 +117,355 @@ async function checkSessaoExistente(){
   if(session) await iniciarApp();
 }
 
-async function iniciarApp(){
-  const { data: { user } } = await sb.auth.getUser();
-  if(!user) return;
+// ---------------- CONTEXTO DA EMPRESA (Fase 3) ----------------
 
-  let { data: empresas } = await sb.from('empresas').select('*').eq('owner_id', user.id).limit(1);
-  if(!empresas || empresas.length===0){
-    const { data: novaEmpresa } = await sb.from('empresas').insert({ owner_id: user.id, nome: 'Minha oficina' }).select();
-    empresas = novaEmpresa;
+const TELAS_PRINCIPAIS = ['authScreen', 'estadoContextoScreen', 'seletorEmpresaScreen', 'appScreen'];
+function mostrarTela(id){
+  TELAS_PRINCIPAIS.forEach(t => document.getElementById(t).classList.toggle('hidden', t !== id));
+}
+
+// Estado genérico (resolvendo, erro técnico, sem vínculo, finalizando
+// cadastro, conta inconsistente, criação não permitida) — reduz duplicação
+// entre esses 6 estados, que só diferem em título/mensagem/ações.
+function mostrarEstadoContexto({ titulo, mensagem, acoes = [] }){
+  document.getElementById('estadoContextoTitulo').textContent = titulo;
+  document.getElementById('estadoContextoMensagem').textContent = mensagem;
+  const container = document.getElementById('estadoContextoAcoes');
+  container.replaceChildren();
+  acoes.forEach(acao=>{
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = acao.primary ? 'btn btn-primary' : 'btn';
+    btn.textContent = acao.label;
+    btn.addEventListener('click', acao.onClick);
+    container.appendChild(btn);
+  });
+  mostrarTela('estadoContextoScreen');
+}
+
+function mostrarSeletorEmpresa(vinculos, onEscolher){
+  const lista = document.getElementById('seletorEmpresaLista');
+  lista.replaceChildren();
+  vinculos.forEach(vinculo=>{
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'seletor-empresa-item';
+    const nomeEl = document.createElement('span');
+    nomeEl.className = 'seletor-empresa-nome';
+    nomeEl.textContent = vinculo.empresa.nome;
+    const papelEl = document.createElement('span');
+    papelEl.className = 'seletor-empresa-papel';
+    papelEl.textContent = vinculo.papel;
+    btn.appendChild(nomeEl);
+    btn.appendChild(papelEl);
+    btn.addEventListener('click', ()=>onEscolher(vinculo));
+    lista.appendChild(btn);
+  });
+  mostrarTela('seletorEmpresaScreen');
+}
+
+function chaveEmpresaAtiva(usuarioId){
+  return 'torque_empresa_ativa:' + usuarioId;
+}
+
+function persistirEscolha(usuarioId, empresaIdEscolhida){
+  localStorage.setItem(chaveEmpresaAtiva(usuarioId), empresaIdEscolhida);
+}
+
+function persistirEscolhaERecarregar(usuarioId, empresaIdEscolhida){
+  persistirEscolha(usuarioId, empresaIdEscolhida);
+  location.reload();
+}
+
+// Nunca confia direto no valor salvo: só aceita se corresponder a um dos
+// vínculos ativos já carregados neste boot. Se não corresponder mais
+// (vínculo desativado, por exemplo), remove a entrada e devolve null.
+function validarEscolhaSalva(usuarioId, vinculosAtivos){
+  const chave = chaveEmpresaAtiva(usuarioId);
+  const empresaIdSalva = localStorage.getItem(chave);
+  if(!empresaIdSalva) return null;
+  const vinculoCorrespondente = vinculosAtivos.find(v => v.empresa_id === empresaIdSalva);
+  if(vinculoCorrespondente) return vinculoCorrespondente;
+  localStorage.removeItem(chave);
+  return null;
+}
+
+// Só vínculos ativos (usuarios_empresas.ativo = true), via
+// usuarios_empresas.usuario_id (nunca user_id) — nunca consulta
+// empresas.owner_id, nunca usa limit(1).
+async function buscarVinculosAtivos(usuarioId){
+  const { data, error } = await sb
+    .from('usuarios_empresas')
+    .select(`
+      id,
+      empresa_id,
+      usuario_id,
+      papel,
+      empresa:empresas!usuarios_empresas_empresa_id_fkey(
+        id,
+        nome,
+        cnpj,
+        telefone,
+        plano,
+        status_assinatura
+      )
+    `)
+    .eq('usuario_id', usuarioId)
+    .eq('ativo', true);
+
+  if(error) throw error;
+
+  const vinculos = data || [];
+  const vinculoSemEmpresa = vinculos.find(v => !v.empresa || !v.empresa.id);
+  if(vinculoSemEmpresa){
+    throw new Error('Vinculo sem dados de empresa retornados (usuarios_empresas.id=' + vinculoSemEmpresa.id + ').');
   }
-  const empresa = empresas[0];
-  empresaId = empresa.id;
-  document.getElementById('empresaNomeLabel').textContent = empresa.nome;
-  empresaNome = empresa.nome || 'a oficina';
-  document.getElementById('oficinaNome').value = empresa.nome || '';
-  document.getElementById('oficinaCnpj').value = empresa.cnpj || '';
-  document.getElementById('oficinaTelefone').value = empresa.telefone || '';
-  document.getElementById('oficinaPlanoLabel').textContent = empresa.plano || 'Teste';
-  const statusPlano = empresa.status_assinatura || 'ativo';
+  return vinculos;
+}
+
+function montarContexto(vinculo){
+  return {
+    empresaId: vinculo.empresa.id,
+    empresaNome: vinculo.empresa.nome,
+    empresaCnpj: vinculo.empresa.cnpj,
+    empresaTelefone: vinculo.empresa.telefone,
+    empresaPlano: vinculo.empresa.plano,
+    empresaStatusAssinatura: vinculo.empresa.status_assinatura,
+    papel: vinculo.papel,
+    vinculoId: vinculo.id,
+    usuarioId: vinculo.usuario_id
+  };
+}
+
+async function entrarNaEmpresa(vinculo){
+  contextoEmpresa = montarContexto(vinculo);
+  // empresaId/empresaNome mantidas só por compatibilidade com o restante do
+  // script (que já usa essas duas variáveis em ~17 pontos) — sempre
+  // atribuídas a partir de contextoEmpresa, nunca em outro lugar.
+  empresaId = contextoEmpresa.empresaId;
+  empresaNome = contextoEmpresa.empresaNome || 'a oficina';
+
+  document.getElementById('empresaNomeLabel').textContent = contextoEmpresa.empresaNome;
+  document.getElementById('oficinaNome').value = contextoEmpresa.empresaNome || '';
+  document.getElementById('oficinaCnpj').value = contextoEmpresa.empresaCnpj || '';
+  document.getElementById('oficinaTelefone').value = contextoEmpresa.empresaTelefone || '';
+  document.getElementById('oficinaPlanoLabel').textContent = contextoEmpresa.empresaPlano || 'Teste';
+  const statusPlano = contextoEmpresa.empresaStatusAssinatura || 'ativo';
   const statusLabels = { ativo: 'Ativo', inadimplente: 'Inadimplente', cancelado: 'Cancelado' };
-  document.getElementById('oficinaStatusLabel').innerHTML = `<span class="tag-pill">${statusLabels[statusPlano] || statusPlano}</span>`;
+  const statusSpan = document.createElement('span');
+  statusSpan.className = 'tag-pill';
+  statusSpan.textContent = statusLabels[statusPlano] || statusPlano;
+  document.getElementById('oficinaStatusLabel').replaceChildren(statusSpan);
 
-  document.getElementById('authScreen').classList.add('hidden');
-  document.getElementById('appScreen').classList.remove('hidden');
+  document.getElementById('trocarEmpresaBtn').classList.toggle('hidden', vinculosAtivosAtual.length <= 1);
+  renderMinhasEmpresas();
 
-  await carregarMarcasModelos();
-  await carregarDados();
+  mostrarTela('appScreen');
+
+  try{
+    await carregarMarcasModelos();
+    await carregarDados();
+  } catch(erro){
+    // Falha aqui é um problema técnico de carregamento, não "sem vínculo" —
+    // o contexto da empresa já está resolvido e válido neste ponto.
+    mostrarEstadoContexto({
+      titulo: 'Erro ao carregar dados',
+      mensagem: 'Não foi possível carregar os dados da empresa. Tente novamente.',
+      acoes: [{ label: 'Tentar novamente', primary: true, onClick: ()=>location.reload() }]
+    });
+  }
+}
+
+function mostrarErroRpcCadastro(erro){
+  const codigo = erro && erro.code;
+  if(codigo === 'TRQ01'){
+    mostrarEstadoContexto({
+      titulo: 'Sessão inválida',
+      mensagem: 'Sua sessão não é válida para concluir o cadastro. Entre novamente.',
+      acoes: [{ label: 'Sair', primary: true, onClick: sairDaConta }]
+    });
+    return;
+  }
+  if(codigo === 'TRQ02'){
+    mostrarEstadoContexto({
+      titulo: 'Conta inconsistente',
+      mensagem: 'Há uma inconsistência na sua conta. Entre em contato com o suporte.',
+      acoes: [{ label: 'Sair', onClick: sairDaConta }]
+    });
+    return;
+  }
+  if(codigo === 'TRQ03'){
+    mostrarEstadoContexto({
+      titulo: 'Criação não permitida',
+      mensagem: 'Sua conta já tem acesso a uma empresa. Atualize a página para continuar.',
+      acoes: [{ label: 'Atualizar', primary: true, onClick: ()=>location.reload() }]
+    });
+    return;
+  }
+  if(codigo === 'TRQ04'){
+    mostrarEstadoContexto({
+      titulo: 'Dados inválidos',
+      mensagem: 'Os dados informados no cadastro são inválidos. Entre em contato com o suporte.',
+      acoes: [{ label: 'Sair', onClick: sairDaConta }]
+    });
+    return;
+  }
+  mostrarEstadoContexto({
+    titulo: 'Erro técnico',
+    mensagem: 'Não foi possível concluir o cadastro da empresa. Tente novamente.',
+    acoes: [
+      { label: 'Tentar novamente', primary: true, onClick: ()=>iniciarApp() },
+      { label: 'Sair', onClick: sairDaConta }
+    ]
+  });
+}
+
+// 0 vínculos + pending_empresa === true: só chega aqui depois que
+// buscarVinculosAtivos() já confirmou 0 vínculos nesta mesma consulta do
+// boot atual. Os valores de user_metadata são só carga útil da RPC — quem
+// autoriza (ou não) a criação é a própria função, no banco.
+async function finalizarCadastroPendente(user){
+  mostrarEstadoContexto({
+    titulo: 'Finalizando cadastro',
+    mensagem: 'Estamos concluindo o cadastro da sua empresa…',
+    acoes: []
+  });
+
+  const metadata = user.user_metadata || {};
+  const { data: resultadoRpc, error } = await sb.rpc('criar_empresa_com_vinculo', {
+    p_nome_empresa: metadata.pending_empresa_nome || null,
+    p_cnpj_empresa: metadata.pending_empresa_cnpj || null,
+    p_telefone_empresa: metadata.pending_empresa_telefone || null
+  });
+
+  if(error){
+    mostrarErroRpcCadastro(error);
+    return;
+  }
+
+  const resultado = Array.isArray(resultadoRpc) ? resultadoRpc[0] : resultadoRpc;
+  if(!resultado || !resultado.empresa_id){
+    mostrarEstadoContexto({
+      titulo: 'Erro técnico',
+      mensagem: 'A criação da empresa não retornou os dados esperados. Tente novamente.',
+      acoes: [
+        { label: 'Tentar novamente', primary: true, onClick: ()=>iniciarApp() },
+        { label: 'Sair', onClick: sairDaConta }
+      ]
+    });
+    return;
+  }
+
+  // Limpeza best-effort do metadata pendente. Se falhar, NÃO desfaz o
+  // cadastro (empresa e vínculo já foram criados pela RPC) e não provoca
+  // uma nova empresa em retries futuros: a partir daqui o usuário sempre
+  // terá >=1 vínculo ativo, então iniciarApp() nunca mais entra neste ramo
+  // de "0 vínculos + pending_empresa", independentemente do metadata.
+  try{
+    await sb.auth.updateUser({
+      data: {
+        pending_empresa: false,
+        pending_empresa_nome: null,
+        pending_empresa_cnpj: null,
+        pending_empresa_telefone: null
+      }
+    });
+  } catch(erroLimpeza){
+    // best-effort — sem ação adicional.
+  }
+
+  persistirEscolhaERecarregar(user.id, resultado.empresa_id);
+}
+
+async function iniciarApp(){
+  if(inicializandoApp) return;
+  inicializandoApp = true;
+  try{
+    mostrarEstadoContexto({
+      titulo: 'Carregando',
+      mensagem: 'Resolvendo o contexto da sua empresa…',
+      acoes: []
+    });
+
+    let user;
+    try{
+      const { data: userData, error: erroUsuario } = await sb.auth.getUser();
+      if(erroUsuario) throw erroUsuario;
+      user = userData.user;
+    } catch(erro){
+      mostrarEstadoContexto({
+        titulo: 'Erro técnico',
+        mensagem: 'Não foi possível confirmar sua sessão. Tente novamente.',
+        acoes: [
+          { label: 'Tentar novamente', primary: true, onClick: ()=>iniciarApp() },
+          { label: 'Sair', onClick: sairDaConta }
+        ]
+      });
+      return;
+    }
+    if(!user){
+      mostrarTela('authScreen');
+      return;
+    }
+
+    let vinculos;
+    try{
+      vinculos = await buscarVinculosAtivos(user.id);
+    } catch(erro){
+      mostrarEstadoContexto({
+        titulo: 'Erro técnico',
+        mensagem: 'Não foi possível carregar os vínculos da sua conta. Tente novamente.',
+        acoes: [
+          { label: 'Tentar novamente', primary: true, onClick: ()=>iniciarApp() },
+          { label: 'Sair', onClick: sairDaConta }
+        ]
+      });
+      return;
+    }
+
+    vinculosAtivosAtual = vinculos;
+    usuarioIdAtual = user.id;
+
+    if(vinculos.length === 0){
+      const pendente = !!(user.user_metadata && user.user_metadata.pending_empresa === true);
+      if(pendente){
+        await finalizarCadastroPendente(user);
+      } else {
+        mostrarEstadoContexto({
+          titulo: 'Sem vínculo',
+          mensagem: 'Sua conta não está associada a nenhuma empresa no momento.',
+          acoes: [{ label: 'Sair', onClick: sairDaConta }]
+        });
+      }
+      return;
+    }
+
+    // Calculada uma única vez aqui — chamar antes do ramo de 1 vínculo
+    // garante que uma escolha salva inválida (empresa diferente da única
+    // empresa vinculada, ou vínculo desativado) já é removida do
+    // localStorage nesta mesma passagem, mesmo que não seja usada abaixo.
+    const escolhaSalva = validarEscolhaSalva(user.id, vinculos);
+
+    if(vinculos.length === 1){
+      // Único vínculo — entra direto nele. Não usa escolhaSalva aqui: com
+      // só uma empresa possível, não há "outra" para escolher a partir do
+      // localStorage.
+      await entrarNaEmpresa(vinculos[0]);
+      return;
+    }
+
+    // Mais de um vínculo — nunca escolhe vinculos[0] arbitrariamente.
+    if(escolhaSalva){
+      await entrarNaEmpresa(escolhaSalva);
+      return;
+    }
+
+    mostrarSeletorEmpresa(vinculos, (vinculoEscolhido)=>{
+      persistirEscolhaERecarregar(user.id, vinculoEscolhido.empresa_id);
+    });
+  } finally {
+    inicializandoApp = false;
+  }
 }
 
 // ---------------- DADOS ----------------
@@ -1490,6 +1845,107 @@ btnToggleSidebar.addEventListener('click', ()=>{
   const recolhida = !sidebarEl.classList.contains('collapsed');
   aplicarEstadoSidebar(recolhida);
   localStorage.setItem('torque_sidebar_recolhida', recolhida ? '1' : '0');
+});
+
+// ---------------- NOVA EMPRESA (usuário já autenticado) ----------------
+let usuarioIdAtual = null;
+let novaEmpresaId = null;
+
+function renderMinhasEmpresas(){
+  const lista = document.getElementById('minhasEmpresasLista');
+  lista.replaceChildren();
+  vinculosAtivosAtual.forEach(vinculo=>{
+    const item = document.createElement('div');
+    item.className = 'minha-empresa-item' + (vinculo.empresa_id === contextoEmpresa.empresaId ? ' ativa' : '');
+    const nomeEl = document.createElement('span');
+    nomeEl.textContent = vinculo.empresa.nome;
+    const papelEl = document.createElement('span');
+    papelEl.className = 'minha-empresa-papel';
+    papelEl.textContent = vinculo.papel;
+    item.appendChild(nomeEl);
+    item.appendChild(papelEl);
+    lista.appendChild(item);
+  });
+}
+
+function abrirModalNovaEmpresa(){
+  document.getElementById('novaEmpresaNome').value = '';
+  document.getElementById('novaEmpresaCnpj').value = '';
+  document.getElementById('novaEmpresaTelefone').value = '';
+  document.getElementById('novaEmpresaError').classList.add('hidden');
+  document.getElementById('novaEmpresaSubmitBtn').disabled = false;
+  document.getElementById('novaEmpresaCancelarBtn').disabled = false;
+  // Novo id só quando o modal é aberto do zero — reaproveitado em retries
+  // do mesmo envio (erro/timeout), nunca entre duas empresas diferentes.
+  novaEmpresaId = crypto.randomUUID();
+  openModal('overlayNovaEmpresa');
+}
+document.getElementById('novaEmpresaSeletorBtn').addEventListener('click', abrirModalNovaEmpresa);
+document.getElementById('novaEmpresaConfigBtn').addEventListener('click', abrirModalNovaEmpresa);
+document.getElementById('novaEmpresaCancelarBtn').addEventListener('click', ()=>closeModal('overlayNovaEmpresa'));
+
+function mostrarErroNovaEmpresa(erro){
+  const el = document.getElementById('novaEmpresaError');
+  const codigo = erro && erro.code;
+  const mensagens = {
+    TRQ11: 'Sua sessão não é válida. Atualize a página e tente novamente.',
+    TRQ14: 'Informe o nome da empresa.',
+    TRQ16: 'Não foi possível criar a empresa agora. Tente novamente.'
+  };
+  el.textContent = mensagens[codigo] || 'Não foi possível criar a empresa agora. Tente novamente.';
+  el.classList.remove('hidden');
+}
+
+document.getElementById('novaEmpresaSubmitBtn').addEventListener('click', async ()=>{
+  const nome = document.getElementById('novaEmpresaNome').value.trim();
+  const cnpj = document.getElementById('novaEmpresaCnpj').value.trim();
+  const telefone = document.getElementById('novaEmpresaTelefone').value.trim();
+  const errEl = document.getElementById('novaEmpresaError');
+  errEl.classList.add('hidden');
+
+  if(!nome){ mostrarErroNovaEmpresa({ code: 'TRQ14' }); return; }
+
+  const submitBtn = document.getElementById('novaEmpresaSubmitBtn');
+  const cancelBtn = document.getElementById('novaEmpresaCancelarBtn');
+  // Capturado antes do await: imune a uma eventual reabertura do modal
+  // (que geraria um novaEmpresaId novo) enquanto esta chamada ainda está
+  // em voo. Cancelar fica bloqueado logo abaixo justamente para essa
+  // reabertura não poder acontecer, mas a captura local é a garantia
+  // definitiva, independente disso.
+  const empresaIdSolicitada = novaEmpresaId;
+
+  submitBtn.disabled = true;
+  cancelBtn.disabled = true;
+
+  try{
+    const { data: resultadoRpc, error } = await sb.rpc('criar_nova_empresa_com_vinculo', {
+      p_empresa_id: empresaIdSolicitada,
+      p_nome_empresa: nome,
+      p_cnpj_empresa: cnpj || null,
+      p_telefone_empresa: telefone || null
+    });
+
+    if(error){
+      mostrarErroNovaEmpresa(error);
+      return;
+    }
+
+    const resultado = Array.isArray(resultadoRpc) ? resultadoRpc[0] : resultadoRpc;
+    if(!resultado || !resultado.empresa_id){
+      mostrarErroNovaEmpresa({ code: null });
+      return;
+    }
+
+    persistirEscolhaERecarregar(usuarioIdAtual, resultado.empresa_id);
+  } catch(erroInesperado){
+    // Falha fora do contrato normal da RPC (erro de rede, exceção do
+    // próprio SDK, etc.) — mesma mensagem genérica de erro técnico,
+    // nunca uma tela em branco silenciosa.
+    mostrarErroNovaEmpresa({ code: null });
+  } finally {
+    submitBtn.disabled = false;
+    cancelBtn.disabled = false;
+  }
 });
 
 checkSessaoExistente();

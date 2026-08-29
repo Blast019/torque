@@ -40,7 +40,7 @@ FASE 2 — RLS e Segurança                         🟢 CONCLUÍDA
         ├── Falha de integridade (os_id/peca_id)      🟢 CORRIGIDA e VALIDADA (5/5 passos, ver seção 4-E)
         └── Conferência final (script 16)             🟢 APROVADA (26/08/2026)
 
-FASE 3 — Contexto da empresa                      ⏳
+FASE 3 — Contexto da empresa                      🟢 CONCLUÍDA (ver ../fase-3/STATUS.md)
 FASE 4 — Usuários e permissões                     ⏳
 FASE 5 — SaaS / Administração                      ⏳
 FASE 6 — Testes finais e produção                  ⏳
