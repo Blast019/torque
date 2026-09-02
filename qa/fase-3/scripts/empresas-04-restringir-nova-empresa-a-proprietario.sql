@@ -74,8 +74,9 @@
 -- Nenhuma empresa nova foi criada durante a validação — o bloco de INSERT
 -- desta função ainda não foi exercitado por nenhum teste.
 --
--- Frontend correspondente (index.html/script.js) já implementado
--- localmente, ainda aguardando commit/push — ver qa/fase-4/STATUS.md.
+-- Frontend correspondente (index.html/script.js) publicado em 02/09/2026
+-- no commit 793c3c5 — backend e frontend sincronizados. Ver
+-- qa/fase-4/STATUS.md.
 
 BEGIN;
 

@@ -12,8 +12,8 @@ FASE 4 — Usuários e permissões                       ⏳ EM ANDAMENTO
     ├── Ajuste de RLS SELECT                          🟢 CONCLUÍDO
     └── QA funcional (27 testes)                      🟢 CONCLUÍDO (27/27 aprovados)
 
-Frontend de gerenciamento de usuários (Configurações)  🟡 EM DESENVOLVIMENTO
-└── Primeiro incremento: listagem de usuários          🟢 CONCLUÍDO LOCALMENTE (aguarda commit/push)
+Frontend de gerenciamento de usuários (Configurações)  🟢 CONCLUÍDO E PUBLICADO (1º incremento)
+└── Primeiro incremento: listagem de usuários          🟢 CONCLUÍDO E PUBLICADO (commit `793c3c5`, 02/09/2026)
 ```
 
 Todos os artefatos referenciados abaixo estão em `qa/fase-4/scripts/`.
@@ -77,13 +77,13 @@ Nenhuma linha adicional. Nenhum `DELETE` manual ou `service_role` foi utilizado 
 
 ## Achado durante o teste local — botão "+ Nova empresa" sem checagem de papel
 
-🟢 **CORRIGIDO — migração aplicada e validada no Supabase (02/09/2026). Frontend implementado localmente, aguardando commit/push.**
+🟢 **CORRIGIDO E PUBLICADO — migração aplicada e validada no Supabase (02/09/2026); frontend publicado em 02/09/2026 no commit `793c3c5` — backend e frontend sincronizados.**
 
 Durante o teste local integrado da seção Usuários (Fase 4.3), logado como `USUARIO_A`, foi identificado que o botão "+ Nova empresa" permanecia visível e funcional — nem o frontend nem a RPC `criar_nova_empresa_com_vinculo` (Fase 3) jamais validaram o papel do chamador em nenhuma empresa. Nova regra aprovada: **somente vínculo ativo `proprietario` na empresa atualmente selecionada pode criar outra empresa.**
 
 Correção:
 - **Backend** — aplicado e validado no banco: migração `qa/fase-3/scripts/empresas-04-restringir-nova-empresa-a-proprietario.sql` (RPC passa a exigir `p_empresa_origem_id` e validar vínculo `proprietario` ativo nela, código `TRQ15`; assinatura antiga de 4 parâmetros removida na mesma transação). QA funcional: 8/8 testes aprovados (7 negativos + replay idempotente), sem criação de empresa/vínculo novo — ver `qa/fase-3/STATUS.md` (seção 10) e o script versionado `qa/fase-3/scripts/empresas-05-qa-restricao-nova-empresa.js`.
-- **Frontend** — implementado e testado localmente, **ainda não commitado/publicado**: botão do seletor de empresas removido; botão de Configurações passa a ser mostrado/ocultado por papel em `entrarNaEmpresa()`; guarda defensiva em `abrirModalNovaEmpresa()`; novo parâmetro `p_empresa_origem_id` na chamada RPC; mensagem para `TRQ15`. Testes visuais aprovados para proprietário, administrador e usuário.
+- **Frontend** — implementado, testado localmente e **publicado em 02/09/2026 no commit `793c3c5`**: botão do seletor de empresas removido; botão de Configurações passa a ser mostrado/ocultado por papel em `entrarNaEmpresa()`; guarda defensiva em `abrirModalNovaEmpresa()`; novo parâmetro `p_empresa_origem_id` na chamada RPC; mensagem para `TRQ15`. Testes visuais aprovados para proprietário, administrador e usuário.
 
 Detalhe completo em `qa/fase-3/STATUS.md` (seção 10 — Alteração posterior), já que a RPC afetada pertence à Fase 3.
 
@@ -91,8 +91,10 @@ Detalhe completo em `qa/fase-3/STATUS.md` (seção 10 — Alteração posterior)
 
 - ~~Aplicar e validar `permissoes-09-listar-usuarios-empresa.sql`.~~ 🟢 Concluído — aplicado e validado no Supabase.
 - ~~Validar a primeira tela de listagem por papel (proprietário/admin visíveis; gerente/usuário sem acesso).~~ 🟢 Concluído — testes visuais aprovados para proprietário, administrador e usuário.
-- Commit e push do frontend (seção Usuários + correção de "+ Nova empresa").
-- Incluir, alterar papel e remover/desativar vínculos.
+- ~~Commit e push do frontend (seção Usuários + correção de "+ Nova empresa").~~ 🟢 Concluído — publicado em 02/09/2026, commit `793c3c5`.
+- Incluir usuário (vincular conta existente à empresa por e-mail).
+- Alterar papel de um vínculo existente.
+- Remover/desativar ou reativar vínculos.
 - Tratamento de reativação (vínculo inativo reaparecendo ao reincluir o mesmo e-mail).
 - Regressão das Fases 2.5 e 3.
 

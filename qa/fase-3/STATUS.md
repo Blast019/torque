@@ -81,7 +81,7 @@ Durante o teste local da Fase 4.3, foi identificado que o botão "+ Nova empresa
 
 > Somente quem possuir vínculo ativo com papel `proprietario` na empresa **atualmente selecionada** pode criar outra empresa.
 
-Status: 🟢 **MIGRAÇÃO APLICADA E VALIDADA no Supabase (02/09/2026). Frontend implementado localmente, ainda aguardando commit/push.**
+Status: 🟢 **CONCLUÍDO E PUBLICADO. Migração aplicada e validada no Supabase (02/09/2026); frontend publicado em 02/09/2026 no commit `793c3c5` — backend e frontend sincronizados.**
 
 Mudanças:
 - **Frontend**: botão `#novaEmpresaSeletorBtn` (tela de seleção de empresas) **removido** — nesse ponto do fluxo não existe "empresa atualmente selecionada" para validar, então o conceito não se aplica; quem for proprietário poderá selecionar a empresa e usar o botão em Configurações. Botão `#novaEmpresaConfigBtn` (Configurações) passa a ser mostrado/ocultado em `entrarNaEmpresa()` conforme `contextoEmpresa.papel === 'proprietario'`. `abrirModalNovaEmpresa()` ganhou uma guarda defensiva equivalente (não abre o modal se o papel atual não for `proprietario`) — a autorização real continua sendo do backend.
