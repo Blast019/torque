@@ -56,7 +56,6 @@
     <h1>Selecionar empresa</h1>
     <p class="sub">Sua conta está vinculada a mais de uma empresa. Escolha qual deseja acessar.</p>
     <div id="seletorEmpresaLista" class="seletor-empresa-lista"></div>
-    <button type="button" class="btn btn-block seletor-empresa-nova-btn" id="novaEmpresaSeletorBtn">+ Nova empresa</button>
   </div>
 </div>
 
@@ -230,6 +229,20 @@
         <div class="table-wrap section-empresas-wrap">
           <div id="minhasEmpresasLista" class="minhas-empresas-lista"></div>
           <button type="button" class="btn btn-primary" id="novaEmpresaConfigBtn">+ Nova empresa</button>
+        </div>
+        <div id="usuariosEmpresaSection" class="hidden">
+          <div class="section-head section-usuarios-head">
+            <div><h2>Usuários</h2><p>Contas vinculadas à empresa atual</p></div>
+          </div>
+          <div class="table-wrap section-usuarios-wrap">
+            <div id="usuariosEmpresaStatus" class="usuarios-empresa-status">Carregando usuários…</div>
+            <div class="table-wrap usuarios-empresa-table-wrap hidden" id="usuariosEmpresaTableWrap">
+              <table>
+                <thead><tr><th>E-mail</th><th>Papel</th><th>Status</th></tr></thead>
+                <tbody id="usuariosEmpresaBody"></tbody>
+              </table>
+            </div>
+          </div>
         </div>
       </div>
     </div>

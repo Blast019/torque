@@ -25,6 +25,8 @@ let osItensAtual = [];
 let financeiroCursor = new Date();
 let filtroTipoMovimento = '';
 let filtroCategoriaMovimento = '';
+let usuariosEmpresaCarregados = false;
+let usuariosEmpresaCarregando = false;
 
 // ---------------- AUTH ----------------
 function alternarModoAuth(){
@@ -258,6 +260,7 @@ async function entrarNaEmpresa(vinculo){
   document.getElementById('oficinaStatusLabel').replaceChildren(statusSpan);
 
   document.getElementById('trocarEmpresaBtn').classList.toggle('hidden', vinculosAtivosAtual.length <= 1);
+  document.getElementById('novaEmpresaConfigBtn').classList.toggle('hidden', contextoEmpresa.papel !== 'proprietario');
   renderMinhasEmpresas();
 
   mostrarTela('appScreen');
@@ -510,11 +513,12 @@ async function carregarDados(){
 }
 
 document.querySelectorAll('.nav-item').forEach(btn=>{
-  btn.addEventListener('click', ()=>{
+  btn.addEventListener('click', async ()=>{
     document.querySelectorAll('.nav-item').forEach(b=>b.classList.remove('active'));
     btn.classList.add('active');
     document.querySelectorAll('.tab-panel').forEach(p=>p.classList.add('hidden'));
     document.getElementById('tab-'+btn.dataset.tab).classList.remove('hidden');
+    if(btn.dataset.tab === 'minhaoficina') await carregarUsuariosEmpresa();
   });
 });
 
@@ -1868,7 +1872,107 @@ function renderMinhasEmpresas(){
   });
 }
 
+function usuarioPodeGerenciarVinculos(){
+  return !!contextoEmpresa && ['proprietario', 'admin'].includes(contextoEmpresa.papel);
+}
+
+function nomePapelUsuario(papel){
+  const nomes = {
+    proprietario: 'Proprietário',
+    admin: 'Administrador',
+    gerente: 'Gerente',
+    usuario: 'Usuário'
+  };
+  return nomes[papel] || papel;
+}
+
+function renderUsuariosEmpresa(usuarios){
+  const body = document.getElementById('usuariosEmpresaBody');
+  body.replaceChildren();
+
+  usuarios.forEach(usuario=>{
+    const tr = document.createElement('tr');
+    const emailTd = document.createElement('td');
+    const papelTd = document.createElement('td');
+    const statusTd = document.createElement('td');
+    const papel = document.createElement('span');
+    const status = document.createElement('span');
+
+    emailTd.textContent = usuario.email;
+    papel.className = 'tag-pill';
+    papel.textContent = nomePapelUsuario(usuario.papel);
+    status.className = 'tag-pill ' + (usuario.ativo ? 'ativo-pill' : 'usuario-inativo-pill');
+    status.textContent = usuario.ativo ? 'Ativo' : 'Inativo';
+
+    papelTd.appendChild(papel);
+    statusTd.appendChild(status);
+    tr.appendChild(emailTd);
+    tr.appendChild(papelTd);
+    tr.appendChild(statusTd);
+    body.appendChild(tr);
+  });
+}
+
+async function carregarUsuariosEmpresa(){
+  const section = document.getElementById('usuariosEmpresaSection');
+  if(!usuarioPodeGerenciarVinculos()){
+    section.classList.add('hidden');
+    return;
+  }
+
+  section.classList.remove('hidden');
+  if(usuariosEmpresaCarregados || usuariosEmpresaCarregando) return;
+  usuariosEmpresaCarregando = true;
+
+  const status = document.getElementById('usuariosEmpresaStatus');
+  const tableWrap = document.getElementById('usuariosEmpresaTableWrap');
+  status.textContent = 'Carregando usuários…';
+  status.classList.remove('hidden', 'usuarios-empresa-error');
+  tableWrap.classList.add('hidden');
+
+  try{
+    let usuarios;
+    let error;
+    try{
+      ({ data: usuarios, error } = await sb.rpc('listar_usuarios_empresa', {
+        p_empresa_id: empresaId
+      }));
+    } catch(erroInesperado){
+      status.textContent = 'Não foi possível carregar os usuários. Tente novamente.';
+      status.classList.add('usuarios-empresa-error');
+      return;
+    }
+
+    if(error){
+      const mensagens = {
+        PGRST202: 'A listagem de usuários ainda precisa ser ativada no banco de dados.',
+        TRQ55: 'Você não tem mais permissão para ver os usuários desta empresa.'
+      };
+      status.textContent = mensagens[error.code] || 'Não foi possível carregar os usuários. Tente novamente.';
+      status.classList.add('usuarios-empresa-error');
+      return;
+    }
+
+    usuariosEmpresaCarregados = true;
+    const lista = usuarios || [];
+    if(lista.length === 0){
+      status.textContent = 'Nenhum usuário vinculado a esta empresa.';
+      return;
+    }
+
+    renderUsuariosEmpresa(lista);
+    status.classList.add('hidden');
+    tableWrap.classList.remove('hidden');
+  } finally {
+    usuariosEmpresaCarregando = false;
+  }
+}
+
 function abrirModalNovaEmpresa(){
+  // Guarda defensiva de frontend: a segurança real fica na RPC (TRQ15),
+  // isto só evita abrir o modal por uma chamada acidental quando o botão
+  // que o dispara já deveria estar oculto para o papel atual.
+  if(!contextoEmpresa || contextoEmpresa.papel !== 'proprietario') return;
   document.getElementById('novaEmpresaNome').value = '';
   document.getElementById('novaEmpresaCnpj').value = '';
   document.getElementById('novaEmpresaTelefone').value = '';
@@ -1880,7 +1984,6 @@ function abrirModalNovaEmpresa(){
   novaEmpresaId = crypto.randomUUID();
   openModal('overlayNovaEmpresa');
 }
-document.getElementById('novaEmpresaSeletorBtn').addEventListener('click', abrirModalNovaEmpresa);
 document.getElementById('novaEmpresaConfigBtn').addEventListener('click', abrirModalNovaEmpresa);
 document.getElementById('novaEmpresaCancelarBtn').addEventListener('click', ()=>closeModal('overlayNovaEmpresa'));
 
@@ -1890,6 +1993,7 @@ function mostrarErroNovaEmpresa(erro){
   const mensagens = {
     TRQ11: 'Sua sessão não é válida. Atualize a página e tente novamente.',
     TRQ14: 'Informe o nome da empresa.',
+    TRQ15: 'Somente o proprietário pode criar uma nova empresa.',
     TRQ16: 'Não foi possível criar a empresa agora. Tente novamente.'
   };
   el.textContent = mensagens[codigo] || 'Não foi possível criar a empresa agora. Tente novamente.';
@@ -1922,7 +2026,8 @@ document.getElementById('novaEmpresaSubmitBtn').addEventListener('click', async 
       p_empresa_id: empresaIdSolicitada,
       p_nome_empresa: nome,
       p_cnpj_empresa: cnpj || null,
-      p_telefone_empresa: telefone || null
+      p_telefone_empresa: telefone || null,
+      p_empresa_origem_id: empresaId
     });
 
     if(error){
