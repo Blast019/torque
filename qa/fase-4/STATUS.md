@@ -16,7 +16,8 @@ Frontend de gerenciamento de usuários (Configurações)  🟡 EM DESENVOLVIMENT
 ├── 1º incremento: listagem de usuários                🟢 CONCLUÍDO E PUBLICADO (commit `793c3c5`, 02/09/2026)
 ├── 2º incremento: incluir/reativar usuário por e-mail  🟡 IMPLEMENTADO LOCALMENTE, reativação c/ escrita OK, inclusão nova pendente (aguarda commit/push)
 ├── 3º incremento: filtros + remover acesso             🟡 IMPLEMENTADO LOCALMENTE, QA com escrita OK (aguarda commit/push)
-└── 4º incremento: botão dedicado "Reativar acesso"     🟢 IMPLEMENTADO, teste visual completo e QA REST (5/5) OK (aguarda commit/push)
+├── 4º incremento: botão dedicado "Reativar acesso"     🟢 IMPLEMENTADO, teste visual completo e QA REST (5/5) OK (aguarda commit/push)
+└── 5º incremento: alterar papel de usuário             🟢 BACKEND + FRONTEND OK, teste visual e QA REST (18/18) OK (aguarda commit/push)
 ```
 
 Todos os artefatos referenciados abaixo estão em `qa/fase-4/scripts/`.
@@ -38,7 +39,7 @@ Todos os artefatos referenciados abaixo estão em `qa/fase-4/scripts/`.
 |---|---|---|
 | Constraint dos 4 papéis | `papel-01` a `papel-05` | Pré-checagem, `ADD CONSTRAINT ... NOT VALID`, `VALIDATE CONSTRAINT`, conferência de definição e script de rollback — restringe `usuarios_empresas.papel` a `proprietario`/`admin`/`gerente`/`usuario`. |
 | `incluir_usuario_empresa` | `permissoes-01-incluir-usuario-empresa.sql` | RPC `SECURITY DEFINER`. Localiza conta existente por e-mail exato (case-insensitive); reativa vínculo inativo existente ou insere um novo; trava por `pg_advisory_xact_lock` chaveada por `empresa_id`. Códigos: `TRQ21` não_autenticado, `TRQ24` entrada_invalida, `TRQ25` sem_permissao, `TRQ26` operacao_nao_permitida (vínculo já ativo), `TRQ27` usuario_nao_encontrado. |
-| `alterar_papel_usuario_empresa` | `permissoes-02-alterar-papel-usuario-empresa.sql` | Bloqueia auto-alteração de papel (`TRQ36`) antes de qualquer outra checagem, inclusive para o próprio proprietário. Admin restrito a mexer só em `gerente`/`usuario`. Códigos: `TRQ31`, `TRQ34`, `TRQ35`, `TRQ36`, `TRQ37`, `TRQ38`, `TRQ39` (proteção do último proprietário — ver nota em QA funcional). |
+| `alterar_papel_usuario_empresa` | `permissoes-02-alterar-papel-usuario-empresa.sql` (histórica) + `permissoes-13-bloquear-papel-proprietario-alteracao.sql` (versão vigente) | Bloqueia auto-alteração de papel (`TRQ36`) antes de qualquer outra checagem, inclusive para o próprio proprietário. Admin restrito a mexer só em `gerente`/`usuario`. Desde `permissoes-13` (03/09/2026), bloqueia incondicionalmente `p_novo_papel='proprietario'` via `TRQ40`, antes de qualquer outra checagem — ver 5º incremento. Códigos: `TRQ31`, `TRQ34`, `TRQ35`, `TRQ36`, `TRQ37`, `TRQ38`, `TRQ39` (proteção do último proprietário — ver nota em QA funcional), `TRQ40`. |
 | `remover_usuario_empresa` | `permissoes-03-remover-usuario-empresa.sql` | Soft delete (`ativo = false`). Autorremoção permitida sem checar hierarquia; proteção do último proprietário ativo vale mesmo em autorremoção. Códigos: `TRQ41`, `TRQ44`, `TRQ45`, `TRQ46`, `TRQ47`, `TRQ49`. |
 | Ajuste da RLS SELECT | `permissoes-04-ajustar-rls-select.sql` | Substitui `usuarios_empresas_select_proprietario` (baseada em `empresas.owner_id`) por `usuarios_empresas_select_proprietario_admin`, baseada no papel ativo (`proprietario` ou `admin`) via função auxiliar `SECURITY DEFINER` `usuario_e_proprietario_ou_admin_ativo`. |
 | Policy corrigida para `TO authenticated` | `permissoes-05-fix-policy-role-authenticated.sql` | A policy criada no script 04 ficou sem cláusula `TO`, aplicando-se a todos os roles (inclusive `anon`) — não era vazamento de dado (função depende de `auth.uid()`, `NULL` para `anon`), mas inconsistente com o padrão das outras 4 policies da tabela. Corrigida para `TO authenticated`. |
@@ -46,6 +47,7 @@ Todos os artefatos referenciados abaixo estão em `qa/fase-4/scripts/`.
 | Scripts de QA — Fase 4.2 | `permissoes-01` a `permissoes-08` | RPCs, RLS e QA funcional (Bloco 1, Bloco 2 e complemento do DEL-03 — ver seção seguinte). |
 | Bloqueio de `proprietario` na inclusão | `permissoes-11-bloquear-papel-proprietario-inclusao.sql` | `CREATE OR REPLACE` de `incluir_usuario_empresa` (mesma assinatura), adicionando `TRQ28` para `p_papel='proprietario'`. Versão vigente da função — ver "Correção de regra" no 2º incremento. |
 | QA REST — reativação direta (4º incremento) | `permissoes-12-qa-reativacao-direta.js` | Equivalente automatizado do botão "Reativar acesso": reativa o vínculo do `LIVRE` via `incluir_usuario_empresa` com o papel travado no valor anterior, confirma `reativado=true`/`vinculo_id`/`criado_em` idênticos ao baseline, e restaura o baseline obrigatoriamente (autorremoção) ao final — com restauração de segurança em qualquer falha. Executado em 03/09/2026, 5/5 aprovados — ver 4º incremento. |
+| QA REST — alterar papel (5º incremento) | `permissoes-14-qa-alterar-papel.js` | Equivalente automatizado do botão "Alterar papel": testa `TRQ34`/`TRQ35`/`TRQ36`/`TRQ37`/`TRQ38`/`TRQ40` (sempre bloqueados antes do `UPDATE`, sem alterar `ADMIN_A`/`USUARIO_A`/`PROP_A`), chamada anônima, e o único ciclo de escrita real sobre o `LIVRE` (reativa → `PROP_A` altera gerente→usuario → `ADMIN_A` altera usuario→gerente → autorremove), com restauração obrigatória do baseline e comparação final byte a byte — com restauração de segurança em qualquer falha. Executado e aprovado em 03/09/2026, 18/18 testes — ver 5º incremento. |
 | Variável de ambiente | `qa/.env.example` | `QA_PASSWORD_PROPRIETARIO_ANTIGO` (vazia no exemplo) — senha própria da conta reaproveitada como "LIVRE" nesta fase, que não usa a senha compartilhada (`SUPABASE_TEST_PASSWORD`) das demais contas de QA. |
 
 Nenhuma senha, chave ou token aparece neste documento.
@@ -235,6 +237,78 @@ Com isso, o 4º incremento conclui toda a cobertura de teste visual planejada (C
 
 Conferência final somente leitura, independente do script (via `listar_usuarios_empresa`, login real de `PROP_A`, caminho de código diferente do usado internamente pelo script): `LIVRE` — `vinculo_id=3a24fbb6-950e-463d-801d-fe529a2ffb34`, papel `gerente`, `ativo=false`, `criado_em=2026-09-02T00:48:43.622014+00:00` (idêntico ao baseline em todos os campos); `USUARIO_A` — `vinculo_id=6dae30bd-9c21-49ad-8b67-a9fb57d1873d`, papel `usuario`, `ativo=true`; total de 4 vínculos na Empresa A. Nenhuma credencial, token ou senha apareceu na saída do script (o login só registra HTTP status e `user_id`).
 
+## 5º incremento — alterar papel de usuário
+
+🟢 **BACKEND CONCLUÍDO, APLICADO E VALIDADO. Frontend IMPLEMENTADO LOCALMENTE, teste visual aprovado, QA REST EXECUTADO E APROVADO (03/09/2026, 18/18 testes). Ainda não commitado/publicado.**
+
+### Investigação da RPC `alterar_papel_usuario_empresa` (leitura completa, sem alteração)
+
+Revisão de `qa/fase-4/scripts/permissoes-02-alterar-papel-usuario-empresa.sql`: parâmetros `(p_vinculo_id uuid, p_novo_papel text)`; retorno `table(vinculo_id, empresa_id, usuario_id, papel_anterior, papel_novo)` — não inclui `ativo` nem `criado_em`. Vínculo inativo é bloqueado incondicionalmente (`TRQ38`), antes de qualquer checagem de hierarquia. Selecionar o mesmo papel atual **não é bloqueado** — a RPC executa um `UPDATE` no-op e retorna sucesso (`papel_anterior === papel_novo`), sem código de erro dedicado. Autoalteração é bloqueada por `TRQ36` antes até da checagem de permissão do chamador, valendo para qualquer papel, inclusive o próprio proprietário. Admin só altera vínculos que hoje são `gerente`/`usuario`, e só pode definir `gerente`/`usuario` (`TRQ35`). `TRQ39` (proteção do último proprietário) confirmado estruturalmente inalcançável por qualquer chamada legítima, pelo mesmo motivo já documentado para `TRQ36`/`TRQ35` nesta RPC (mesma família de códigos: `TRQ31`, `TRQ34`–`TRQ39`). `vinculo_id`, `criado_em` e `ativo` são preservados (só a coluna `papel` é tocada pelo `UPDATE`).
+
+**Achado**: diferente de `incluir_usuario_empresa` (bloqueio `TRQ28` para `'proprietario'`, aplicado na correção de regra do 2º incremento), `alterar_papel_usuario_empresa` **não tinha nenhum bloqueio equivalente** — um proprietário podia promover qualquer vínculo ativo não-próprio a `proprietario` via chamada REST direta, sem passar pelo frontend. Corrigido nesta rodada (ver migração abaixo).
+
+### Correção de regra — papel `proprietario` bloqueado também em `alterar_papel_usuario_empresa`
+
+🟢 **MIGRAÇÃO APLICADA E VALIDADA no Supabase (03/09/2026). `TRQ40` aprovado para proprietário e administrador via QA com escrita controlada.**
+
+- **Pré-checagem** (somente leitura, antes da migração): busca por todos os códigos `TRQxx` versionados no repositório confirmou `TRQ40` livre. Assinatura `(uuid, text)` e grants (`authenticated` com acesso, `anon` bloqueado) confirmados ao vivo por 3 chamadas reais que nunca alcançam o `UPDATE` — `p_vinculo_id` nulo → `TRQ34`; UUID inexistente → `TRQ37`; chamada anônima → `401`/`42501`. `Owner=postgres` e grants explícitos para `postgres`/`service_role` não foram reconfirmados por catálogo ao vivo (este projeto não usa `service_role`, sem cliente de banco disponível nesta sessão) — documentados com base no arquivo histórico, nunca substituído por outra migração até aqui.
+- **Migração**: `qa/fase-4/scripts/permissoes-13-bloquear-papel-proprietario-alteracao.sql` — `CREATE OR REPLACE` de `alterar_papel_usuario_empresa` (mesma assinatura de 2 parâmetros, sem `DROP` necessário), adicionando a checagem `p_novo_papel = 'proprietario'` → `TRQ40` logo após a validação de entrada existente (`TRQ34`), antes de localizar o vínculo, travar a empresa ou verificar qualquer permissão. Todo o restante do corpo permanece idêntico ao de `permissoes-02` (confirmado por diff completo entre os dois arquivos — única diferença funcional é o bloco `2b`). `Owner`/`grants` preservados sem alteração. **Aplicada manualmente pelo usuário no SQL Editor do Supabase** (mesmo fluxo de todas as migrações desta fase — esta sessão não possui cliente de banco/`service_role` para aplicar DDL diretamente).
+- **QA com escrita controlada via REST** (login real por papel; baseline dos 4 vínculos da Empresa A capturado antes de qualquer mutação e comparado byte a byte ao final):
+
+| Teste | Resultado |
+|---|---|
+| `PROP_A` tenta promover `ADMIN_A` a `proprietario` | ✅ `HTTP 400`, `code=TRQ40` |
+| Vínculo de `ADMIN_A` inalterado após a tentativa (`id`/`papel`/`ativo`/`criado_em`) | ✅ Idêntico ao baseline |
+| `ADMIN_A` tenta promover `USUARIO_A` a `proprietario` | ✅ `HTTP 400`, `code=TRQ40` |
+| Vínculo de `USUARIO_A` inalterado após a tentativa | ✅ Idêntico ao baseline |
+| `p_novo_papel='papel_invalido'` (entrada inválida), com `p_vinculo_id` **válido** (`ADMIN_A`) | ✅ `HTTP 400`, `code=TRQ34` |
+| Vínculo de `ADMIN_A` inalterado após a tentativa de `TRQ34` | ✅ Idêntico ao baseline (byte a byte, 4 vínculos, antes/depois) |
+| Chamada anônima | ✅ `HTTP 401`, `code=42501` |
+| Alteração permitida continua funcionando (`PROP_A` altera `LIVRE` de `gerente` para `usuario`) | ✅ `HTTP 200`, `papel_anterior=gerente`, `papel_novo=usuario`, mesmo `vinculo_id` |
+| Alteração permitida continua funcionando (`ADMIN_A` altera `LIVRE` de `usuario` para `gerente`) | ✅ `HTTP 200`, `papel_anterior=usuario`, `papel_novo=gerente`, mesmo `vinculo_id` |
+| Restauração do baseline (autorremoção do `LIVRE`) | ✅ `HTTP 200`, `ativo=false` |
+| Estado final byte a byte idêntico ao baseline (4 vínculos: `id`/`usuario_id`/`papel`/`ativo`/`criado_em`) | ✅ Idêntico |
+
+**13/13 verificações aprovadas** (11 da primeira rodada + o teste `TRQ34`, executado à parte por ter ficado pendente na primeira rodada, e sua conferência de integridade). `LIVRE` restaurado a `gerente`/inativo (mesmo `vinculo_id` e `criado_em` do baseline). Owner e grants pós-migração reconfirmados pela mesma via indireta da pré-checagem: `authenticated` continua alcançando o corpo da função (todas as chamadas de `PROP_A`/`ADMIN_A` acima chegaram às validações internas), `anon` continua bloqueado (`42501`); `owner=postgres` não foi alterado pela migração (linha `alter function ... owner to postgres` preservada sem mudança, confirmada no diff). QA executado via scripts ad hoc, não versionados (validação pontual da migração, diferente dos scripts de QA funcional já versionados desta fase).
+
+### Frontend — botão "Alterar papel"
+
+🟢 **IMPLEMENTADO LOCALMENTE, TESTE VISUAL APROVADO E QA REST EXECUTADO E APROVADO (03/09/2026, `permissoes-14-qa-alterar-papel.js`, 18/18). Ainda não commitado/publicado.**
+
+Não cria nenhum SQL novo — usa exclusivamente `alterar_papel_usuario_empresa` (versão vigente, `permissoes-13`, já lida integralmente antes desta implementação).
+
+**Botão "Alterar papel"** (`renderUsuariosEmpresa()`, `script.js`): aparece **ao lado de** "Remover acesso" no mesmo bloco de vínculos ativos, reaproveitando exatamente a mesma condição de exibição já usada por "Remover acesso" (`usuario.ativo && usuarioPodeRemoverAlvo(contextoEmpresa.papel, usuario.papel)`) — essa reutilização já garante, sem checagem extra, que o botão nunca aparece na própria linha do chamador (o papel do próprio chamador nunca está na sua própria lista de papéis gerenciáveis) nem em vínculos `proprietario`.
+
+**Modal reutilizado** (`#overlayAdicionarUsuario`, terceiro modo, mesmo modal de "Adicionar usuário"/"Reativar acesso" — nenhum modal novo, nenhuma alteração em `index.html` além da já existente `id="adicionarUsuarioTitulo"`): título "Alterar papel"; e-mail preenchido e **bloqueado** (mesmo padrão da reativação); `<select>` de papel **habilitado** (diferente da reativação, que trava o papel) com opções calculadas por `montarOpcoesNovoPapelAlterar(papelAtual)` — mesma base por papel do chamador de "Adicionar usuário" (proprietário: `admin`/`gerente`/`usuario`; admin: `gerente`/`usuario`; `proprietario` nunca oferecido), excluindo também o papel atual do alvo.
+
+**Guardas defensivas**: `validarAlteracaoPapelUsuarioEmpresa(vinculoId)` — vínculo ativo, não é a própria linha (checagem explícita por `usuario_id`, além da garantia estrutural da matriz), hierarquia; usada na abertura do modal e revalidada no envio. Antes de chamar a RPC, revalida também que o papel escolhido no `<select>` continua entre as opções válidas para o papel atual do alvo (cobre o alvo ter mudado de papel em outra aba). Depois da RPC, só é sucesso se `vinculo_id` e `papel_novo` retornados baterem com o esperado. Proteção contra duplo clique reaproveita a mesma flag `adicionandoUsuarioEmpresa`. Mapeamento de erros: `TRQ34`, `TRQ35`, `TRQ36`, `TRQ37`, `TRQ38`, `TRQ39`, `TRQ40`, mais `ESTADO_DESATUALIZADO_ALTERAR` e `CONFIRMACAO_ALTERACAO_FALHOU`.
+
+Implementação isolada da lógica de "Adicionar usuário"/"Reativar acesso": `enviarAlteracaoPapel()` é chamada por *early return* no topo do handler de envio compartilhado, sem alterar nenhuma linha do código já estável desses dois fluxos.
+
+**Teste visual aprovado (03/09/2026)**, no navegador local, cobrindo: fluxo completo com `PROP_A` e com `ADMIN_A`; opções de papel corretas por perfil (nunca oferece o papel atual, nunca oferece `proprietario`); Cancelar sem chamada de rede; proteção contra duplo clique (uma única chamada); aba Network confirmando uma única chamada a `alterar_papel_usuario_empresa`, HTTP 200; mensagem "Papel alterado com sucesso." e atualização da lista; Console sem erros da aplicação; responsividade aprovada (mesmo viewport 600×786 já usado no 4º incremento). `LIVRE` restaurado como `gerente`/inativo ao final.
+
+**QA REST com escrita controlada — EXECUTADO E APROVADO em 03/09/2026, 18/18 testes**: `qa/fase-4/scripts/permissoes-14-qa-alterar-papel.js` — cobre `TRQ34`, `TRQ35`, `TRQ36`, `TRQ37`, `TRQ38`, `TRQ40` (via chamadas sempre bloqueadas antes do `UPDATE`, com defesa em profundidade — só o `LIVRE` pode ser alvo de uma chamada capaz de chegar ao `UPDATE`), chamada anônima bloqueada, e o único ciclo de escrita real do script sobre o `LIVRE` (reativação → `PROP_A` altera gerente→usuario → `ADMIN_A` altera usuario→gerente → autorremoção), com `id`/`criado_em`/`ativo` reconferidos preservados a cada passo, restauração obrigatória do baseline (`gerente`/inativo, incluindo proteção contra exceções inesperadas via `try/catch` em torno de toda a fase mutável) e comparação final byte a byte.
+
+**Resultado da execução (03/09/2026)**: **18/18 testes aprovados, 0 reprovados** — `BASELINE-01`, `TRQ34-01`, `TRQ37-01`, `TRQ36-01`, `TRQ38-01`, `TRQ40-01`, `TRQ40-02`, `CONF-BLOQUEIOS-01`, `ANON-01`, `REATIVAR-01`, `TRQ35-01`, `CONF-TRQ35-01`, `ALTERAR-PROP-01`, `CONF-PROP-01`, `ALTERAR-ADMIN-01`, `CONF-ADMIN-01`, `RESTORE-01`, `FINAL-01`. Nenhuma falha ocorreu — a rotina de restauração de emergência (`falhaComRestauracao()`/`restaurarLivre()`) não precisou ser acionada; `RESTORE-01` foi a etapa de restauração planejada do próprio fluxo. `LIVRE` terminou `gerente`/inativo, mesmo `vinculo_id` e `criado_em` do baseline; `PROP_A`, `ADMIN_A` e `USUARIO_A` confirmados inalterados; estado final byte a byte idêntico ao baseline capturado em `BASELINE-01`. Conferência independente pós-execução, via `listar_usuarios_empresa` (caminho de código diferente do usado internamente pelo script), confirmou exatamente o mesmo resultado.
+
+**Execução de 03/09/2026 — `BASELINE-01` reprovado, script abortado ANTES de qualquer mutação (proteção de pré-voo funcionando como projetado):**
+
+| Conta | Esperado | Encontrado |
+|---|---|---|
+| `PROP_A` | proprietário/ativo | ✅ proprietário/ativo |
+| `ADMIN_A` | admin/ativo | ✅ admin/ativo |
+| `USUARIO_A` | usuário/ativo | ✅ usuário/ativo |
+| `LIVRE` | gerente/**inativo** | ⚠️ gerente/**ativo** |
+
+`LIVRE` (`vinculo_id=3a24fbb6-950e-463d-801d-fe529a2ffb34`) estava **ativo** no banco, divergindo do baseline estabelecido nesta fase (gerente/inativo) — motivo não investigado (provável resíduo do ciclo de teste visual anterior). **Nenhum dos testes (`TRQ34`/`TRQ35`/`TRQ36`/`TRQ37`/`TRQ38`/`TRQ40`, chamada anônima, alterações permitidas, preservação de campos, estado final) foi executado** — o script parou no ponto exato em que foi projetado para parar, sem nenhuma chamada de escrita.
+
+**Restauração controlada do baseline (exclusiva do `LIVRE`), autorizada e executada em 03/09/2026** — via script ad hoc, não versionado (mesmo padrão de `verificacao-baseline-empresa-a.js`/`pre-checagem-alterar-papel.js`), sem alterar SQL, frontend ou `permissoes-14`:
+1. Consulta independente via `listar_usuarios_empresa` confirmou as 5 condições exigidas antes de qualquer escrita: exatamente 1 vínculo do `LIVRE`, `vinculo_id` esperado, `papel=gerente`, `ativo=true`, `criado_em` esperado.
+2. Autorremoção do `LIVRE` via `remover_usuario_empresa` — `HTTP 200`, `ativo=false` confirmado no retorno.
+3. Nova consulta independente via `listar_usuarios_empresa` confirmou: mesmo `vinculo_id`, mesmo `criado_em`, `papel=gerente`, `ativo=false`, total de 4 vínculos na Empresa A, e `PROP_A`/`ADMIN_A`/`USUARIO_A` byte a byte inalterados.
+
+Baseline restaurado e confirmado antes da reexecução do QA (ver resultado acima — 18/18 aprovados).
+
 ## Cargo, admissão, desligamento e recontratação — investigação e decisões
 
 🟡 **REQUISITO REGISTRADO. Investigação somente leitura (baseada em código/documentação, sem conferência ao vivo do catálogo) concluída. Decisões de escopo confirmadas pelo usuário. Nenhum SQL ou frontend criado nesta fase.**
@@ -271,8 +345,12 @@ Conferência final somente leitura, independente do script (via `listar_usuarios
 - ~~Implementar botão dedicado "Reativar acesso" (4º incremento).~~ 🟢 Concluído — implementado, teste visual aprovado em 03/09/2026 para `PROP_A` e `ADMIN_A`.
 - ~~Executar `permissoes-12-qa-reativacao-direta.js` (QA REST automatizado da reativação, com restauração obrigatória do baseline).~~ 🟢 Concluído em 03/09/2026 — 5/5 testes aprovados, baseline restaurado e confirmado por conferência independente.
 - ~~Teste visual restante do 4º incremento (Cancelar, clique duplo, Console, Network, responsividade abaixo de 600px).~~ 🟢 Concluído em 03/09/2026 — todos aprovados. O caso específico de um vínculo inativo cujo papel anterior é `admin` continua sem fixture disponível para teste.
-- Commit e push do 2º, 3º e 4º incrementos (frontend + `permissoes-09` já publicada + `permissoes-11` já publicada).
-- Alterar papel de um vínculo existente.
+- ~~Commit e push do 2º, 3º e 4º incrementos (frontend + `permissoes-09` já publicada + `permissoes-11` já publicada).~~ 🟢 Concluído — publicado em 03/09/2026, commit `d0c662c`.
+- ~~Aplicar e validar `permissoes-13-bloquear-papel-proprietario-alteracao.sql` (bloqueio `TRQ40` em `alterar_papel_usuario_empresa`).~~ 🟢 Concluído — aplicado e validado no Supabase, 13/13 verificações aprovadas (incluindo `TRQ34`).
+- ~~Implementar o frontend do 5º incremento ("Alterar papel").~~ 🟢 Concluído — implementado, teste visual aprovado em 03/09/2026 para `PROP_A` e `ADMIN_A`.
+- ~~Investigar/restaurar o baseline do `LIVRE`~~ 🟢 Concluído em 03/09/2026 — restauração controlada (autorremoção via `remover_usuario_empresa`), confirmada por leitura independente antes/depois (`vinculo_id`/`criado_em` preservados, `ativo=false`, 4 vínculos, `PROP_A`/`ADMIN_A`/`USUARIO_A` inalterados).
+- ~~Reexecutar `permissoes-14-qa-alterar-papel.js` (QA REST com escrita controlada, restauração obrigatória do baseline).~~ 🟢 Concluído em 03/09/2026 — 18/18 testes aprovados, baseline restaurado e confirmado por conferência independente.
+- Commit e push do 5º incremento (frontend + `permissoes-13` já aplicada no Supabase + `permissoes-14`).
 - Fluxo separado de saída do próprio proprietário.
 - Cargo, admissão, desligamento e recontratação — requisito registrado, análise somente leitura pendente (ver seção dedicada).
 - Regressão das Fases 2.5 e 3.

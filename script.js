@@ -32,6 +32,7 @@ let usuariosEmpresaListaAtual = [];
 let vinculoIdParaRemover = null;
 let removendoUsuarioEmpresa = false;
 let vinculoIdParaReativar = null;
+let vinculoIdParaAlterarPapel = null;
 
 // ---------------- AUTH ----------------
 function alternarModoAuth(){
@@ -1939,13 +1940,24 @@ function renderUsuariosEmpresa(usuarios){
     papelTd.appendChild(papel);
     statusTd.appendChild(status);
 
-    // "Remover acesso" só em vínculos ativos e só quando o papel do
-    // chamador tem permissão sobre o papel do alvo (proprietario nunca
-    // aparece como alvo aqui — saída do próprio proprietário é um fluxo
-    // separado, fora do escopo deste incremento).
+    // "Alterar papel" e "Remover acesso" só em vínculos ativos e só
+    // quando o papel do chamador tem permissão sobre o papel do alvo
+    // (proprietario nunca aparece como alvo aqui — saída do próprio
+    // proprietário é um fluxo separado, fora do escopo deste incremento).
+    // Essa mesma condição já garante "nunca na própria linha" sem checar
+    // usuario_id explicitamente: o papel do próprio chamador nunca está
+    // na sua própria lista de papéis gerenciáveis (proprietario não tem
+    // 'proprietario' na lista; admin não tem 'admin' na lista) — mesma
+    // garantia estrutural já documentada para "Remover acesso".
     if(usuario.ativo && usuarioPodeRemoverAlvo(contextoEmpresa.papel, usuario.papel)){
       const acoes = document.createElement('div');
       acoes.className = 'row-actions';
+      const alterarPapelBtn = document.createElement('button');
+      alterarPapelBtn.type = 'button';
+      alterarPapelBtn.className = 'btn btn-ghost btn-sm';
+      alterarPapelBtn.textContent = 'Alterar papel';
+      alterarPapelBtn.addEventListener('click', ()=>abrirModalAlterarPapel(usuario.vinculo_id));
+      acoes.appendChild(alterarPapelBtn);
       const removerBtn = document.createElement('button');
       removerBtn.type = 'button';
       removerBtn.className = 'btn btn-ghost btn-sm';
@@ -2098,6 +2110,7 @@ function abrirModalAdicionarUsuario(){
   // que o dispara já deveria estar oculto para o papel atual.
   if(!usuarioPodeGerenciarVinculos()) return;
   vinculoIdParaReativar = null;
+  vinculoIdParaAlterarPapel = null;
   document.getElementById('adicionarUsuarioTitulo').textContent = 'Adicionar usuário';
   const emailInput = document.getElementById('adicionarUsuarioEmail');
   emailInput.value = '';
@@ -2136,6 +2149,7 @@ function abrirModalReativarUsuario(vinculoId){
   if(!alvo) return;
 
   vinculoIdParaReativar = vinculoId;
+  vinculoIdParaAlterarPapel = null;
   document.getElementById('adicionarUsuarioTitulo').textContent = 'Reativar acesso';
   document.getElementById('adicionarUsuarioError').classList.add('hidden');
   document.getElementById('usuariosEmpresaFeedback').classList.add('hidden');
@@ -2158,9 +2172,72 @@ function abrirModalReativarUsuario(vinculoId){
   openModal('overlayAdicionarUsuario');
 }
 
+// Monta as opções de papel oferecidas em "Alterar papel": mesma base por
+// papel do chamador de montarOpcoesPapelAdicionarUsuario() (proprietario
+// oferece admin/gerente/usuario; admin oferece só gerente/usuario;
+// 'proprietario' nunca é oferecido), excluindo também o papel ATUAL do
+// alvo - a lista nunca oferece o papel que o vínculo já tem.
+function montarOpcoesNovoPapelAlterar(papelAtual){
+  const base = contextoEmpresa.papel === 'proprietario'
+    ? ['admin', 'gerente', 'usuario']
+    : ['gerente', 'usuario'];
+  return base.filter(papel => papel !== papelAtual);
+}
+
+// Guarda defensiva de frontend (NÃO substitui a segurança real, que é da
+// RPC alterar_papel_usuario_empresa): confirma que o vínculo ainda existe
+// em usuariosEmpresaListaAtual, que continua ATIVO, que não é a própria
+// linha do chamador, e que o papel atual do chamador tem permissão sobre
+// o papel ATUAL do alvo (mesma matriz usada em "Remover acesso"/
+// "Reativar acesso").
+function validarAlteracaoPapelUsuarioEmpresa(vinculoId){
+  if(!vinculoId) return null;
+  const alvo = usuariosEmpresaListaAtual.find(u=>u.vinculo_id === vinculoId);
+  if(!alvo || !alvo.ativo) return null;
+  if(alvo.usuario_id === contextoEmpresa.usuarioId) return null;
+  if(!usuarioPodeRemoverAlvo(contextoEmpresa.papel, alvo.papel)) return null;
+  return alvo;
+}
+
+// Reutiliza o modal "Adicionar usuário" em modo alteração de papel:
+// e-mail vem preenchido e bloqueado (mesmo padrão do modo reativação),
+// mas o papel fica HABILITADO para escolha - diferente da reativação, que
+// trava o papel no valor anterior, aqui a RPC exige um papel novo
+// explícito.
+function abrirModalAlterarPapel(vinculoId){
+  const alvo = validarAlteracaoPapelUsuarioEmpresa(vinculoId);
+  if(!alvo) return;
+
+  vinculoIdParaReativar = null;
+  vinculoIdParaAlterarPapel = vinculoId;
+  document.getElementById('adicionarUsuarioTitulo').textContent = 'Alterar papel';
+  document.getElementById('adicionarUsuarioError').classList.add('hidden');
+  document.getElementById('usuariosEmpresaFeedback').classList.add('hidden');
+
+  const emailInput = document.getElementById('adicionarUsuarioEmail');
+  emailInput.value = alvo.email;
+  emailInput.disabled = true;
+
+  const papelSelect = document.getElementById('adicionarUsuarioPapel');
+  papelSelect.replaceChildren();
+  montarOpcoesNovoPapelAlterar(alvo.papel).forEach(papel=>{
+    const option = document.createElement('option');
+    option.value = papel;
+    option.textContent = nomePapelUsuario(papel);
+    papelSelect.appendChild(option);
+  });
+  papelSelect.disabled = false;
+
+  document.getElementById('adicionarUsuarioSubmitBtn').textContent = 'Alterar papel';
+  document.getElementById('adicionarUsuarioSubmitBtn').disabled = false;
+  document.getElementById('adicionarUsuarioCancelarBtn').disabled = false;
+  openModal('overlayAdicionarUsuario');
+}
+
 document.getElementById('adicionarUsuarioCancelarBtn').addEventListener('click', ()=>{
   if(adicionandoUsuarioEmpresa) return;
   vinculoIdParaReativar = null;
+  vinculoIdParaAlterarPapel = null;
   closeModal('overlayAdicionarUsuario');
 });
 
@@ -2173,18 +2250,105 @@ function mostrarErroAdicionarUsuario(erro){
     TRQ26: 'Este e-mail já possui vínculo ativo nesta empresa.',
     TRQ27: 'Nenhuma conta foi encontrada com esse e-mail. A pessoa precisa criar uma conta na Torque antes de ser incluída.',
     TRQ28: 'O papel Proprietário não pode ser atribuído por este fluxo.',
+    TRQ34: 'Selecione um papel válido.',
+    TRQ35: 'Você não tem permissão para atribuir esse papel.',
+    TRQ36: 'Não é possível alterar o próprio papel.',
+    TRQ37: 'Vínculo não encontrado. Atualize a lista e tente novamente.',
+    TRQ38: 'Este vínculo está inativo. Reative o acesso antes de alterar o papel.',
+    TRQ39: 'Não é possível alterar o papel do único proprietário ativo da empresa.',
+    TRQ40: 'O papel Proprietário não pode ser atribuído por este fluxo.',
     ESTADO_DESATUALIZADO: 'Este vínculo não está mais disponível para reativação. Atualize a lista e tente novamente.',
-    CONFIRMACAO_REATIVACAO_FALHOU: 'Não foi possível confirmar a reativação deste vínculo. Atualize a página e verifique o estado atual antes de tentar novamente.'
+    ESTADO_DESATUALIZADO_ALTERAR: 'Este vínculo não está mais disponível para alteração de papel. Atualize a lista e tente novamente.',
+    CONFIRMACAO_REATIVACAO_FALHOU: 'Não foi possível confirmar a reativação deste vínculo. Atualize a página e verifique o estado atual antes de tentar novamente.',
+    CONFIRMACAO_ALTERACAO_FALHOU: 'Não foi possível confirmar a alteração deste papel. Atualize a página e verifique o estado atual antes de tentar novamente.'
   };
-  const mensagemGenerica = vinculoIdParaReativar
-    ? 'Não foi possível reativar o acesso agora. Tente novamente.'
-    : 'Não foi possível concluir a inclusão agora. Tente novamente.';
+  const mensagemGenerica = vinculoIdParaAlterarPapel
+    ? 'Não foi possível alterar o papel agora. Tente novamente.'
+    : vinculoIdParaReativar
+      ? 'Não foi possível reativar o acesso agora. Tente novamente.'
+      : 'Não foi possível concluir a inclusão agora. Tente novamente.';
   el.textContent = mensagens[codigo] || mensagemGenerica;
   el.classList.remove('hidden');
 }
 
+// Envio do modo "Alterar papel" - função separada, chamada por early
+// return no clique compartilhado do modal, para não misturar sua lógica
+// (RPC diferente: alterar_papel_usuario_empresa, campos de retorno
+// diferentes) com os modos adicionar/reativar já estáveis.
+async function enviarAlteracaoPapel(){
+  const errEl = document.getElementById('adicionarUsuarioError');
+  errEl.classList.add('hidden');
+
+  // Revalida vínculo ativo, autoalteração e hierarquia imediatamente
+  // antes do envio - não confia no estado capturado quando o modal abriu.
+  const alvo = validarAlteracaoPapelUsuarioEmpresa(vinculoIdParaAlterarPapel);
+  if(!alvo){
+    mostrarErroAdicionarUsuario({ code: 'ESTADO_DESATUALIZADO_ALTERAR' });
+    return;
+  }
+
+  const novoPapel = document.getElementById('adicionarUsuarioPapel').value;
+  if(!novoPapel){ mostrarErroAdicionarUsuario({ code: 'TRQ34' }); return; }
+
+  // Reconfere que o papel escolhido ainda está entre as opções válidas
+  // para o papel ATUAL do alvo - cobre o caso do alvo ter mudado de papel
+  // em outra aba entre a abertura do modal e este clique.
+  const papeisPermitidos = montarOpcoesNovoPapelAlterar(alvo.papel);
+  if(!papeisPermitidos.includes(novoPapel)){
+    mostrarErroAdicionarUsuario({ code: 'ESTADO_DESATUALIZADO_ALTERAR' });
+    return;
+  }
+
+  const submitBtn = document.getElementById('adicionarUsuarioSubmitBtn');
+  const cancelBtn = document.getElementById('adicionarUsuarioCancelarBtn');
+  adicionandoUsuarioEmpresa = true;
+  submitBtn.disabled = true;
+  cancelBtn.disabled = true;
+
+  try{
+    const { data: resultadoRpc, error } = await sb.rpc('alterar_papel_usuario_empresa', {
+      p_vinculo_id: vinculoIdParaAlterarPapel,
+      p_novo_papel: novoPapel
+    });
+
+    if(error){
+      mostrarErroAdicionarUsuario(error);
+      return;
+    }
+
+    const resultado = Array.isArray(resultadoRpc) ? resultadoRpc[0] : resultadoRpc;
+    // Só é tratado como sucesso se a RPC confirmar o MESMO vínculo e o
+    // papel escolhido - qualquer divergência não fecha o modal como sucesso.
+    if(!resultado || resultado.vinculo_id !== vinculoIdParaAlterarPapel || resultado.papel_novo !== novoPapel){
+      mostrarErroAdicionarUsuario({ code: 'CONFIRMACAO_ALTERACAO_FALHOU' });
+      usuariosEmpresaCarregados = false;
+      await carregarUsuariosEmpresa();
+      return;
+    }
+
+    closeModal('overlayAdicionarUsuario');
+    vinculoIdParaAlterarPapel = null;
+
+    usuariosEmpresaCarregados = false;
+    await carregarUsuariosEmpresa();
+
+    mostrarFeedbackUsuariosEmpresa('Papel alterado com sucesso.');
+  } catch(erroInesperado){
+    mostrarErroAdicionarUsuario({ code: null });
+  } finally {
+    adicionandoUsuarioEmpresa = false;
+    submitBtn.disabled = false;
+    cancelBtn.disabled = false;
+  }
+}
+
 document.getElementById('adicionarUsuarioSubmitBtn').addEventListener('click', async ()=>{
   if(adicionandoUsuarioEmpresa) return;
+
+  if(vinculoIdParaAlterarPapel){
+    await enviarAlteracaoPapel();
+    return;
+  }
 
   const errEl = document.getElementById('adicionarUsuarioError');
   errEl.classList.add('hidden');
