@@ -233,12 +233,29 @@
         <div id="usuariosEmpresaSection" class="hidden">
           <div class="section-head section-usuarios-head">
             <div><h2>Usuários</h2><p>Contas vinculadas à empresa atual</p></div>
+            <button type="button" class="btn btn-primary" id="adicionarUsuarioBtn">+ Adicionar usuário</button>
           </div>
+          <div id="usuariosEmpresaFeedback" class="usuarios-empresa-feedback hidden" role="status"></div>
           <div class="table-wrap section-usuarios-wrap">
+            <div class="field usuarios-empresa-filtros">
+              <input type="text" id="usuariosEmpresaBuscaEmail" placeholder="Buscar por e-mail" aria-label="Buscar por e-mail">
+              <select id="usuariosEmpresaFiltroStatus" aria-label="Filtrar por status">
+                <option value="ativos" selected>Ativos</option>
+                <option value="inativos">Inativos</option>
+                <option value="todos">Todos</option>
+              </select>
+              <select id="usuariosEmpresaFiltroPapel" aria-label="Filtrar por papel">
+                <option value="">Todos os papéis</option>
+                <option value="proprietario">Proprietário</option>
+                <option value="admin">Administrador</option>
+                <option value="gerente">Gerente</option>
+                <option value="usuario">Usuário</option>
+              </select>
+            </div>
             <div id="usuariosEmpresaStatus" class="usuarios-empresa-status">Carregando usuários…</div>
             <div class="table-wrap usuarios-empresa-table-wrap hidden" id="usuariosEmpresaTableWrap">
               <table>
-                <thead><tr><th>E-mail</th><th>Papel</th><th>Status</th></tr></thead>
+                <thead><tr><th>E-mail</th><th>Papel</th><th>Status</th><th>Ações</th></tr></thead>
                 <tbody id="usuariosEmpresaBody"></tbody>
               </table>
             </div>
@@ -410,6 +427,28 @@
   <div class="modal-actions">
     <button type="button" class="btn" id="novaEmpresaCancelarBtn">Cancelar</button>
     <button type="button" class="btn btn-primary" id="novaEmpresaSubmitBtn">Criar empresa</button>
+  </div>
+</div></div>
+
+<div class="overlay" id="overlayAdicionarUsuario"><div class="modal">
+  <h3 id="adicionarUsuarioTitulo">Adicionar usuário</h3>
+  <div id="adicionarUsuarioError" class="auth-error hidden"></div>
+  <div class="field"><label for="adicionarUsuarioEmail">E-mail</label><input type="email" id="adicionarUsuarioEmail" autocomplete="email" placeholder="pessoa@email.com"></div>
+  <div class="field"><label for="adicionarUsuarioPapel">Papel</label><select id="adicionarUsuarioPapel"></select></div>
+  <div class="modal-actions">
+    <button type="button" class="btn" id="adicionarUsuarioCancelarBtn">Cancelar</button>
+    <button type="button" class="btn btn-primary" id="adicionarUsuarioSubmitBtn">Adicionar usuário</button>
+  </div>
+</div></div>
+
+<div class="overlay" id="overlayRemoverUsuario"><div class="modal">
+  <h3>Remover acesso</h3>
+  <div id="removerUsuarioError" class="auth-error hidden"></div>
+  <p>Deseja remover o acesso deste usuário à empresa?</p>
+  <p class="usuarios-empresa-alvo-email" id="removerUsuarioEmailAlvo"></p>
+  <div class="modal-actions">
+    <button type="button" class="btn" id="removerUsuarioCancelarBtn">Cancelar</button>
+    <button type="button" class="btn btn-primary" id="removerUsuarioConfirmarBtn">Remover acesso</button>
   </div>
 </div></div>
 

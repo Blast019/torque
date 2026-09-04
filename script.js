@@ -27,6 +27,11 @@ let filtroTipoMovimento = '';
 let filtroCategoriaMovimento = '';
 let usuariosEmpresaCarregados = false;
 let usuariosEmpresaCarregando = false;
+let adicionandoUsuarioEmpresa = false;
+let usuariosEmpresaListaAtual = [];
+let vinculoIdParaRemover = null;
+let removendoUsuarioEmpresa = false;
+let vinculoIdParaReativar = null;
 
 // ---------------- AUTH ----------------
 function alternarModoAuth(){
@@ -241,6 +246,19 @@ function montarContexto(vinculo){
 
 async function entrarNaEmpresa(vinculo){
   contextoEmpresa = montarContexto(vinculo);
+
+  // Defensivo: mesmo a troca de empresa hoje sempre passando por um reload
+  // completo da página (persistirEscolhaERecarregar()), que já zeraria esse
+  // estado sozinho, esta função é o único ponto de entrada do contexto de
+  // uma empresa — reseta explicitamente aqui para não depender
+  // implicitamente do reload como garantia de correção. Evita que dados ou
+  // filtros da empresa anterior apareçam, mesmo momentaneamente.
+  usuariosEmpresaListaAtual = [];
+  usuariosEmpresaCarregados = false;
+  document.getElementById('usuariosEmpresaBuscaEmail').value = '';
+  document.getElementById('usuariosEmpresaFiltroStatus').value = 'ativos';
+  document.getElementById('usuariosEmpresaFiltroPapel').value = '';
+
   // empresaId/empresaNome mantidas só por compatibilidade com o restante do
   // script (que já usa essas duas variáveis em ~17 pontos) — sempre
   // atribuídas a partir de contextoEmpresa, nunca em outro lugar.
@@ -1886,6 +1904,19 @@ function nomePapelUsuario(papel){
   return nomes[papel] || papel;
 }
 
+// Mesma matriz de hierarquia usada tanto para "Remover acesso" (vínculos
+// ativos) quanto para "Reativar acesso" (vínculos inativos, onde o papel a
+// reativar é travado no papel anterior do vínculo) - em ambos os casos a
+// pergunta é idêntica: "o papel do chamador tem autoridade sobre este
+// papel específico?". proprietario nunca é alvo em nenhum dos dois fluxos.
+function usuarioPodeRemoverAlvo(papelChamador, papelAlvo){
+  const papeisRemoviveis = {
+    proprietario: ['admin', 'gerente', 'usuario'],
+    admin: ['gerente', 'usuario']
+  };
+  return (papeisRemoviveis[papelChamador] || []).includes(papelAlvo);
+}
+
 function renderUsuariosEmpresa(usuarios){
   const body = document.getElementById('usuariosEmpresaBody');
   body.replaceChildren();
@@ -1895,6 +1926,7 @@ function renderUsuariosEmpresa(usuarios){
     const emailTd = document.createElement('td');
     const papelTd = document.createElement('td');
     const statusTd = document.createElement('td');
+    const acoesTd = document.createElement('td');
     const papel = document.createElement('span');
     const status = document.createElement('span');
 
@@ -1906,12 +1938,88 @@ function renderUsuariosEmpresa(usuarios){
 
     papelTd.appendChild(papel);
     statusTd.appendChild(status);
+
+    // "Remover acesso" só em vínculos ativos e só quando o papel do
+    // chamador tem permissão sobre o papel do alvo (proprietario nunca
+    // aparece como alvo aqui — saída do próprio proprietário é um fluxo
+    // separado, fora do escopo deste incremento).
+    if(usuario.ativo && usuarioPodeRemoverAlvo(contextoEmpresa.papel, usuario.papel)){
+      const acoes = document.createElement('div');
+      acoes.className = 'row-actions';
+      const removerBtn = document.createElement('button');
+      removerBtn.type = 'button';
+      removerBtn.className = 'btn btn-ghost btn-sm';
+      removerBtn.textContent = 'Remover acesso';
+      removerBtn.addEventListener('click', ()=>abrirConfirmacaoRemoverUsuario(usuario.vinculo_id));
+      acoes.appendChild(removerBtn);
+      acoesTd.appendChild(acoes);
+    } else if(!usuario.ativo && usuarioPodeRemoverAlvo(contextoEmpresa.papel, usuario.papel)){
+      // "Reativar acesso" só em vínculos inativos, com a mesma matriz de
+      // hierarquia acima aplicada ao papel ANTERIOR do vínculo — o modal
+      // reutilizado trava o papel nesse mesmo valor (sem opção de trocar),
+      // então esta condição de exibição já prevê exatamente o que a RPC
+      // vai aceitar.
+      const acoes = document.createElement('div');
+      acoes.className = 'row-actions';
+      const reativarBtn = document.createElement('button');
+      reativarBtn.type = 'button';
+      reativarBtn.className = 'btn btn-ghost btn-sm';
+      reativarBtn.textContent = 'Reativar acesso';
+      reativarBtn.addEventListener('click', ()=>abrirModalReativarUsuario(usuario.vinculo_id));
+      acoes.appendChild(reativarBtn);
+      acoesTd.appendChild(acoes);
+    }
+
     tr.appendChild(emailTd);
     tr.appendChild(papelTd);
     tr.appendChild(statusTd);
+    tr.appendChild(acoesTd);
     body.appendChild(tr);
   });
 }
+
+function filtrarUsuariosEmpresa(lista){
+  const busca = document.getElementById('usuariosEmpresaBuscaEmail').value.trim().toLowerCase();
+  const status = document.getElementById('usuariosEmpresaFiltroStatus').value;
+  const papel = document.getElementById('usuariosEmpresaFiltroPapel').value;
+
+  return lista.filter(usuario=>{
+    if(busca && !(usuario.email || '').toLowerCase().includes(busca)) return false;
+    if(status === 'ativos' && !usuario.ativo) return false;
+    if(status === 'inativos' && usuario.ativo) return false;
+    if(papel && usuario.papel !== papel) return false;
+    return true;
+  });
+}
+
+// Aplicação puramente local, sobre usuariosEmpresaListaAtual (já carregada
+// via RPC) — busca/status/papel nunca disparam uma nova chamada de rede.
+function aplicarFiltrosUsuariosEmpresa(){
+  const status = document.getElementById('usuariosEmpresaStatus');
+  const tableWrap = document.getElementById('usuariosEmpresaTableWrap');
+
+  if(usuariosEmpresaListaAtual.length === 0){
+    status.textContent = 'Nenhum usuário vinculado a esta empresa.';
+    status.classList.remove('hidden', 'usuarios-empresa-error');
+    tableWrap.classList.add('hidden');
+    return;
+  }
+
+  const filtrados = filtrarUsuariosEmpresa(usuariosEmpresaListaAtual);
+  if(filtrados.length === 0){
+    status.textContent = 'Não foram encontrados usuários com os filtros selecionados.';
+    status.classList.remove('hidden', 'usuarios-empresa-error');
+    tableWrap.classList.add('hidden');
+    return;
+  }
+
+  renderUsuariosEmpresa(filtrados);
+  status.classList.add('hidden');
+  tableWrap.classList.remove('hidden');
+}
+document.getElementById('usuariosEmpresaBuscaEmail').addEventListener('input', aplicarFiltrosUsuariosEmpresa);
+document.getElementById('usuariosEmpresaFiltroStatus').addEventListener('change', aplicarFiltrosUsuariosEmpresa);
+document.getElementById('usuariosEmpresaFiltroPapel').addEventListener('change', aplicarFiltrosUsuariosEmpresa);
 
 async function carregarUsuariosEmpresa(){
   const section = document.getElementById('usuariosEmpresaSection');
@@ -1954,19 +2062,308 @@ async function carregarUsuariosEmpresa(){
     }
 
     usuariosEmpresaCarregados = true;
-    const lista = usuarios || [];
-    if(lista.length === 0){
-      status.textContent = 'Nenhum usuário vinculado a esta empresa.';
-      return;
-    }
-
-    renderUsuariosEmpresa(lista);
-    status.classList.add('hidden');
-    tableWrap.classList.remove('hidden');
+    usuariosEmpresaListaAtual = usuarios || [];
+    aplicarFiltrosUsuariosEmpresa();
   } finally {
     usuariosEmpresaCarregando = false;
   }
 }
+
+function mostrarFeedbackUsuariosEmpresa(mensagem){
+  const el = document.getElementById('usuariosEmpresaFeedback');
+  el.textContent = mensagem;
+  el.classList.remove('hidden');
+}
+
+function montarOpcoesPapelAdicionarUsuario(){
+  const select = document.getElementById('adicionarUsuarioPapel');
+  select.replaceChildren();
+  // 'proprietario' nunca é oferecido aqui — o fluxo "Adicionar usuário"
+  // não pode atribuir esse papel (regra TRQ28); transferência de
+  // propriedade terá um fluxo separado e mais protegido no futuro.
+  const papeis = contextoEmpresa.papel === 'proprietario'
+    ? ['admin', 'gerente', 'usuario']
+    : ['gerente', 'usuario'];
+  papeis.forEach(papel=>{
+    const option = document.createElement('option');
+    option.value = papel;
+    option.textContent = nomePapelUsuario(papel);
+    select.appendChild(option);
+  });
+}
+
+function abrirModalAdicionarUsuario(){
+  // Guarda defensiva de frontend: a segurança real fica na RPC (TRQ25),
+  // isto só evita abrir o modal por uma chamada acidental quando o botão
+  // que o dispara já deveria estar oculto para o papel atual.
+  if(!usuarioPodeGerenciarVinculos()) return;
+  vinculoIdParaReativar = null;
+  document.getElementById('adicionarUsuarioTitulo').textContent = 'Adicionar usuário';
+  const emailInput = document.getElementById('adicionarUsuarioEmail');
+  emailInput.value = '';
+  emailInput.disabled = false;
+  document.getElementById('adicionarUsuarioError').classList.add('hidden');
+  document.getElementById('usuariosEmpresaFeedback').classList.add('hidden');
+  montarOpcoesPapelAdicionarUsuario();
+  document.getElementById('adicionarUsuarioPapel').disabled = false;
+  document.getElementById('adicionarUsuarioSubmitBtn').textContent = 'Adicionar usuário';
+  document.getElementById('adicionarUsuarioSubmitBtn').disabled = false;
+  document.getElementById('adicionarUsuarioCancelarBtn').disabled = false;
+  openModal('overlayAdicionarUsuario');
+}
+document.getElementById('adicionarUsuarioBtn').addEventListener('click', abrirModalAdicionarUsuario);
+
+// Guarda defensiva de frontend (NÃO substitui a segurança real, que é da
+// RPC incluir_usuario_empresa): confirma que o vínculo ainda existe em
+// usuariosEmpresaListaAtual, que continua INATIVO, e que o papel atual do
+// chamador tem permissão sobre o papel ANTERIOR do alvo (mesma matriz usada
+// em "Remover acesso" - aqui o papel fica travado nesse valor anterior, sem
+// opção de escolher outro).
+function validarReativacaoUsuarioEmpresa(vinculoId){
+  if(!vinculoId) return null;
+  const alvo = usuariosEmpresaListaAtual.find(u=>u.vinculo_id === vinculoId);
+  if(!alvo || alvo.ativo) return null;
+  if(!usuarioPodeRemoverAlvo(contextoEmpresa.papel, alvo.papel)) return null;
+  return alvo;
+}
+
+// Reutiliza o modal "Adicionar usuário" em modo reativação: e-mail e papel
+// vêm preenchidos e bloqueados a partir do vínculo inativo clicado (este
+// fluxo nunca troca o papel) - a confirmação do envio é o próprio clique no
+// botão do modal, como já ocorre em "Adicionar usuário" e "Remover acesso".
+function abrirModalReativarUsuario(vinculoId){
+  const alvo = validarReativacaoUsuarioEmpresa(vinculoId);
+  if(!alvo) return;
+
+  vinculoIdParaReativar = vinculoId;
+  document.getElementById('adicionarUsuarioTitulo').textContent = 'Reativar acesso';
+  document.getElementById('adicionarUsuarioError').classList.add('hidden');
+  document.getElementById('usuariosEmpresaFeedback').classList.add('hidden');
+
+  const emailInput = document.getElementById('adicionarUsuarioEmail');
+  emailInput.value = alvo.email;
+  emailInput.disabled = true;
+
+  const papelSelect = document.getElementById('adicionarUsuarioPapel');
+  papelSelect.replaceChildren();
+  const option = document.createElement('option');
+  option.value = alvo.papel;
+  option.textContent = nomePapelUsuario(alvo.papel);
+  papelSelect.appendChild(option);
+  papelSelect.disabled = true;
+
+  document.getElementById('adicionarUsuarioSubmitBtn').textContent = 'Reativar acesso';
+  document.getElementById('adicionarUsuarioSubmitBtn').disabled = false;
+  document.getElementById('adicionarUsuarioCancelarBtn').disabled = false;
+  openModal('overlayAdicionarUsuario');
+}
+
+document.getElementById('adicionarUsuarioCancelarBtn').addEventListener('click', ()=>{
+  if(adicionandoUsuarioEmpresa) return;
+  vinculoIdParaReativar = null;
+  closeModal('overlayAdicionarUsuario');
+});
+
+function mostrarErroAdicionarUsuario(erro){
+  const el = document.getElementById('adicionarUsuarioError');
+  const codigo = erro && erro.code;
+  const mensagens = {
+    TRQ24: 'Informe um e-mail e um papel válidos.',
+    TRQ25: 'Você não tem permissão para incluir esse papel.',
+    TRQ26: 'Este e-mail já possui vínculo ativo nesta empresa.',
+    TRQ27: 'Nenhuma conta foi encontrada com esse e-mail. A pessoa precisa criar uma conta na Torque antes de ser incluída.',
+    TRQ28: 'O papel Proprietário não pode ser atribuído por este fluxo.',
+    ESTADO_DESATUALIZADO: 'Este vínculo não está mais disponível para reativação. Atualize a lista e tente novamente.',
+    CONFIRMACAO_REATIVACAO_FALHOU: 'Não foi possível confirmar a reativação deste vínculo. Atualize a página e verifique o estado atual antes de tentar novamente.'
+  };
+  const mensagemGenerica = vinculoIdParaReativar
+    ? 'Não foi possível reativar o acesso agora. Tente novamente.'
+    : 'Não foi possível concluir a inclusão agora. Tente novamente.';
+  el.textContent = mensagens[codigo] || mensagemGenerica;
+  el.classList.remove('hidden');
+}
+
+document.getElementById('adicionarUsuarioSubmitBtn').addEventListener('click', async ()=>{
+  if(adicionandoUsuarioEmpresa) return;
+
+  const errEl = document.getElementById('adicionarUsuarioError');
+  errEl.classList.add('hidden');
+
+  const modoReativacao = !!vinculoIdParaReativar;
+
+  // Modo reativação: e-mail e papel NÃO vêm dos campos do modal (que só
+  // exibem, travados) - vêm de uma revalidação contra o estado atual de
+  // usuariosEmpresaListaAtual, feita imediatamente antes da chamada, para
+  // não confiar num vínculo que pode ter mudado (ex.: removido de novo, ou
+  // papel do próprio chamador alterado) entre a abertura do modal e este
+  // clique.
+  let alvoReativacao = null;
+  if(modoReativacao){
+    alvoReativacao = validarReativacaoUsuarioEmpresa(vinculoIdParaReativar);
+    if(!alvoReativacao){
+      mostrarErroAdicionarUsuario({ code: 'ESTADO_DESATUALIZADO' });
+      return;
+    }
+  }
+
+  // Modo adicionar: só remove espaços nas pontas — nunca altera
+  // maiúsculas/minúsculas do e-mail digitado; a comparação case-insensitive
+  // é feita pela RPC.
+  const email = modoReativacao ? alvoReativacao.email : document.getElementById('adicionarUsuarioEmail').value.trim();
+  const papel = modoReativacao ? alvoReativacao.papel : document.getElementById('adicionarUsuarioPapel').value;
+
+  if(!email || !papel){ mostrarErroAdicionarUsuario({ code: 'TRQ24' }); return; }
+
+  const submitBtn = document.getElementById('adicionarUsuarioSubmitBtn');
+  const cancelBtn = document.getElementById('adicionarUsuarioCancelarBtn');
+  adicionandoUsuarioEmpresa = true;
+  submitBtn.disabled = true;
+  cancelBtn.disabled = true;
+
+  try{
+    const { data: resultadoRpc, error } = await sb.rpc('incluir_usuario_empresa', {
+      p_empresa_id: empresaId,
+      p_email: email,
+      p_papel: papel
+    });
+
+    if(error){
+      mostrarErroAdicionarUsuario(error);
+      return;
+    }
+
+    const resultado = Array.isArray(resultadoRpc) ? resultadoRpc[0] : resultadoRpc;
+    if(!resultado || !resultado.vinculo_id){
+      mostrarErroAdicionarUsuario({ code: null });
+      return;
+    }
+
+    // Confirmação pós-chamada específica do modo reativação: a RPC deve ter
+    // reativado (não inserido) e deve ter agido sobre o MESMO vinculo_id
+    // que abriu o modal - qualquer divergência não é tratada como sucesso.
+    if(modoReativacao && (resultado.reativado !== true || resultado.vinculo_id !== vinculoIdParaReativar)){
+      mostrarErroAdicionarUsuario({ code: 'CONFIRMACAO_REATIVACAO_FALHOU' });
+      usuariosEmpresaCarregados = false;
+      await carregarUsuariosEmpresa();
+      return;
+    }
+
+    closeModal('overlayAdicionarUsuario');
+    document.getElementById('adicionarUsuarioEmail').value = '';
+    vinculoIdParaReativar = null;
+
+    // Força uma nova busca em carregarUsuariosEmpresa() (que, por padrão,
+    // só busca uma vez por carregamento de página). Se essa recarga falhar,
+    // o erro fica isolado em #usuariosEmpresaStatus — não sobrescreve a
+    // mensagem de sucesso da inclusão, mostrada logo abaixo.
+    usuariosEmpresaCarregados = false;
+    await carregarUsuariosEmpresa();
+
+    mostrarFeedbackUsuariosEmpresa(resultado.reativado ? 'Vínculo reativado com sucesso.' : 'Usuário incluído com sucesso.');
+  } catch(erroInesperado){
+    mostrarErroAdicionarUsuario({ code: null });
+  } finally {
+    adicionandoUsuarioEmpresa = false;
+    submitBtn.disabled = false;
+    cancelBtn.disabled = false;
+  }
+});
+
+// Guarda defensiva de frontend (NÃO substitui a segurança real, que é da
+// RPC): confirma que o vínculo ainda existe em usuariosEmpresaListaAtual,
+// que continua ativo, que vinculoId é um valor válido, e que o papel atual
+// do chamador ainda tem permissão sobre o papel do alvo — reduz o risco de
+// abrir/confirmar a remoção com um estado de tela desatualizado (ex.: outra
+// aba já removeu o mesmo vínculo, ou o papel do chamador mudou).
+function validarRemocaoUsuarioEmpresa(vinculoId){
+  if(!vinculoId) return null;
+  const alvo = usuariosEmpresaListaAtual.find(u=>u.vinculo_id === vinculoId);
+  if(!alvo || !alvo.ativo) return null;
+  if(!usuarioPodeRemoverAlvo(contextoEmpresa.papel, alvo.papel)) return null;
+  return alvo;
+}
+
+function abrirConfirmacaoRemoverUsuario(vinculoId){
+  const alvo = validarRemocaoUsuarioEmpresa(vinculoId);
+  if(!alvo) return;
+  vinculoIdParaRemover = vinculoId;
+  document.getElementById('removerUsuarioEmailAlvo').textContent = alvo.email;
+  document.getElementById('removerUsuarioError').classList.add('hidden');
+  document.getElementById('removerUsuarioConfirmarBtn').disabled = false;
+  document.getElementById('removerUsuarioCancelarBtn').disabled = false;
+  openModal('overlayRemoverUsuario');
+}
+document.getElementById('removerUsuarioCancelarBtn').addEventListener('click', ()=>{
+  if(removendoUsuarioEmpresa) return;
+  vinculoIdParaRemover = null;
+  closeModal('overlayRemoverUsuario');
+});
+
+function mostrarErroRemoverUsuario(erro){
+  const el = document.getElementById('removerUsuarioError');
+  const codigo = erro && erro.code;
+  const mensagens = {
+    TRQ44: 'Não foi possível identificar o vínculo a remover.',
+    TRQ45: 'Você não tem permissão para remover esse acesso.',
+    TRQ46: 'Este vínculo já está inativo.',
+    TRQ47: 'Vínculo não encontrado. Atualize a lista e tente novamente.',
+    TRQ49: 'Não é possível remover o único proprietário ativo da empresa.',
+    ESTADO_DESATUALIZADO: 'Este vínculo não está mais disponível para remoção. Atualize a lista e tente novamente.'
+  };
+  el.textContent = mensagens[codigo] || 'Não foi possível remover o acesso agora. Tente novamente.';
+  el.classList.remove('hidden');
+}
+
+document.getElementById('removerUsuarioConfirmarBtn').addEventListener('click', async ()=>{
+  if(removendoUsuarioEmpresa || !vinculoIdParaRemover) return;
+
+  // Revalidação defensiva imediatamente antes de chamar a RPC — o estado
+  // pode ter mudado entre a abertura do modal e este clique.
+  if(!validarRemocaoUsuarioEmpresa(vinculoIdParaRemover)){
+    mostrarErroRemoverUsuario({ code: 'ESTADO_DESATUALIZADO' });
+    return;
+  }
+
+  const confirmarBtn = document.getElementById('removerUsuarioConfirmarBtn');
+  const cancelarBtn = document.getElementById('removerUsuarioCancelarBtn');
+  removendoUsuarioEmpresa = true;
+  confirmarBtn.disabled = true;
+  cancelarBtn.disabled = true;
+
+  try{
+    const { data: resultadoRpc, error } = await sb.rpc('remover_usuario_empresa', {
+      p_vinculo_id: vinculoIdParaRemover
+    });
+
+    if(error){
+      mostrarErroRemoverUsuario(error);
+      return;
+    }
+
+    const resultado = Array.isArray(resultadoRpc) ? resultadoRpc[0] : resultadoRpc;
+    if(!resultado || !resultado.vinculo_id){
+      mostrarErroRemoverUsuario({ code: null });
+      return;
+    }
+
+    closeModal('overlayRemoverUsuario');
+    vinculoIdParaRemover = null;
+
+    // Mesmo padrão de invalidação + recarga usado em "Adicionar usuário".
+    // Como o filtro padrão é "Ativos", o vínculo agora inativo some da
+    // visualização atual — continua acessível em "Inativos"/"Todos".
+    usuariosEmpresaCarregados = false;
+    await carregarUsuariosEmpresa();
+
+    mostrarFeedbackUsuariosEmpresa('Acesso removido com sucesso.');
+  } catch(erroInesperado){
+    mostrarErroRemoverUsuario({ code: null });
+  } finally {
+    removendoUsuarioEmpresa = false;
+    confirmarBtn.disabled = false;
+    cancelarBtn.disabled = false;
+  }
+});
 
 function abrirModalNovaEmpresa(){
   // Guarda defensiva de frontend: a segurança real fica na RPC (TRQ15),
