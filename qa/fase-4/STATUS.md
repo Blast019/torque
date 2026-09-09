@@ -1,6 +1,44 @@
 # Fase 4 — Usuários e Permissões
 
-Última atualização: 2026-09-03
+Última atualização: 2026-09-05
+
+## Checkpoint da sessão (05/09/2026) — ler antes de continuar
+
+**Ponto exato em que paramos**: o 6º incremento ("Sair da empresa") está **implementado, testado e aprovado em todas as frentes** (QA REST, teste responsivo da sidebar, teste visual do fluxo real com o `LIVRE`), mas **ainda não commitado nem publicado**. Nenhuma ação de escrita está em andamento; não há nenhum ciclo de teste pendente de finalizar.
+
+**Alterações realizadas nesta sessão** (working tree, nada staged):
+- `script.js` — fluxo completo "Sair da empresa" (botão em "Minhas empresas", modal, guarda `validarSaidaEmpresa`, confirmação de sucesso pelos 4 campos da RPC, `location.reload()`) + sidebar móvel em formato drawer (segundo modo de estado, separado do `collapsed` do desktop, `matchMedia('(max-width: 820px)')`, 4 listeners de fechamento).
+- `index.html` — modal `#overlaySairEmpresa`; backdrop `#sidebarBackdrop`; atributos de acessibilidade (`aria-controls`, `aria-expanded`, `aria-label`) em `#btnToggleSidebar`.
+- `style.css` — `.minha-empresa-info` (layout do botão "Sair"); regras do drawer móvel, todas dentro de `@media(max-width:820px)` (zero impacto acima disso).
+- `qa/fase-4/scripts/permissoes-15-qa-sair-empresa.js` (novo arquivo, ainda não rastreado pelo Git) — QA REST do 6º incremento.
+- `qa/fase-4/STATUS.md` — documentação de tudo isso (este arquivo).
+- `CNAME` — modificação **pré-existente ao início desta sessão**, nunca tocada por mim; continua fora de qualquer commit.
+
+**Testes executados e aprovados**:
+- `permissoes-15-qa-sair-empresa.js` — QA REST, 5/5 (`BASELINE-01`, `REATIVAR-01`, `SAIR-LIVRE-01`, `CONF-01`, `FINAL-01`), 05/09/2026.
+- Teste visual responsivo da sidebar (768px, 390px, desktop >820px) — aprovado; motivou a correção do drawer móvel (bug pré-existente, não relacionado ao 6º incremento).
+- Teste visual do fluxo "Sair da empresa" (ciclo real do `LIVRE`) — aprovado; durante a preparação, encontradas e corrigidas manualmente (pela UI, fora de qualquer script) duas divergências em `USUARIO_A` e `ADMIN_A` causadas por um teste manual anterior do 5º incremento (detalhes na seção "6º incremento" abaixo).
+
+**Pendências** (nenhuma delas iniciada):
+- Commit e push do 6º incremento (os 4 arquivos modificados + `permissoes-15-qa-sair-empresa.js` novo — `CNAME` fica de fora).
+- QA com escrita da "inclusão nova" do 2º incremento (usuário sem vínculo prévio) — pendente desde antes desta sessão.
+- Fluxo de transferência de propriedade — não implementado, necessário para um proprietário conseguir sair da própria empresa no futuro.
+- Cargo/admissão/desligamento/recontratação — investigação concluída, implementação não iniciada.
+- Regressão das Fases 2.5 e 3 — não iniciada.
+- Cenários de 1 e 2+ vínculos restantes (tela pós-saída) — validados só por revisão de código, nunca ao vivo (sem fixtures multi-empresa disponíveis).
+
+**Estado atual do Git** (branch `main`, sincronizada com `origin/main`, HEAD em `39bd0ef`):
+```
+git status -sb
+## main...origin/main
+ M CNAME
+ M index.html
+ M qa/fase-4/STATUS.md
+ M script.js
+ M style.css
+?? qa/fase-4/scripts/permissoes-15-qa-sair-empresa.js
+```
+Nada está staged. Nenhum `git add`, `commit` ou `push` foi executado nesta sessão além do que já estava publicado em `39bd0ef` no início. Próxima ação, quando autorizada: revisão pré-staging dos 5 arquivos do 6º incremento (mesmo padrão já usado nos incrementos anteriores), seguida de `git add` só desses 5 arquivos, depois commit e push.
 
 ## Situação geral
 
@@ -14,10 +52,11 @@ FASE 4 — Usuários e permissões                       ⏳ EM ANDAMENTO
 
 Frontend de gerenciamento de usuários (Configurações)  🟡 EM DESENVOLVIMENTO
 ├── 1º incremento: listagem de usuários                🟢 CONCLUÍDO E PUBLICADO (commit `793c3c5`, 02/09/2026)
-├── 2º incremento: incluir/reativar usuário por e-mail  🟡 IMPLEMENTADO LOCALMENTE, reativação c/ escrita OK, inclusão nova pendente (aguarda commit/push)
-├── 3º incremento: filtros + remover acesso             🟡 IMPLEMENTADO LOCALMENTE, QA com escrita OK (aguarda commit/push)
-├── 4º incremento: botão dedicado "Reativar acesso"     🟢 IMPLEMENTADO, teste visual completo e QA REST (5/5) OK (aguarda commit/push)
-└── 5º incremento: alterar papel de usuário             🟢 BACKEND + FRONTEND OK, teste visual e QA REST (18/18) OK (aguarda commit/push)
+├── 2º incremento: incluir/reativar usuário por e-mail  🟡 PUBLICADO (commit `39bd0ef`), reativação c/ escrita OK, inclusão nova pendente
+├── 3º incremento: filtros + remover acesso             🟢 PUBLICADO (commit `39bd0ef`), QA com escrita OK
+├── 4º incremento: botão dedicado "Reativar acesso"     🟢 PUBLICADO (commit `39bd0ef`), teste visual completo e QA REST (5/5) OK
+├── 5º incremento: alterar papel de usuário             🟢 PUBLICADO (commit `39bd0ef`), teste visual e QA REST (18/18) OK
+└── 6º incremento: sair da empresa                      🟢 IMPLEMENTADO, QA REST (5/5) OK, teste responsivo OK, teste visual do fluxo OK (aguarda commit/push)
 ```
 
 Todos os artefatos referenciados abaixo estão em `qa/fase-4/scripts/`.
@@ -48,6 +87,7 @@ Todos os artefatos referenciados abaixo estão em `qa/fase-4/scripts/`.
 | Bloqueio de `proprietario` na inclusão | `permissoes-11-bloquear-papel-proprietario-inclusao.sql` | `CREATE OR REPLACE` de `incluir_usuario_empresa` (mesma assinatura), adicionando `TRQ28` para `p_papel='proprietario'`. Versão vigente da função — ver "Correção de regra" no 2º incremento. |
 | QA REST — reativação direta (4º incremento) | `permissoes-12-qa-reativacao-direta.js` | Equivalente automatizado do botão "Reativar acesso": reativa o vínculo do `LIVRE` via `incluir_usuario_empresa` com o papel travado no valor anterior, confirma `reativado=true`/`vinculo_id`/`criado_em` idênticos ao baseline, e restaura o baseline obrigatoriamente (autorremoção) ao final — com restauração de segurança em qualquer falha. Executado em 03/09/2026, 5/5 aprovados — ver 4º incremento. |
 | QA REST — alterar papel (5º incremento) | `permissoes-14-qa-alterar-papel.js` | Equivalente automatizado do botão "Alterar papel": testa `TRQ34`/`TRQ35`/`TRQ36`/`TRQ37`/`TRQ38`/`TRQ40` (sempre bloqueados antes do `UPDATE`, sem alterar `ADMIN_A`/`USUARIO_A`/`PROP_A`), chamada anônima, e o único ciclo de escrita real sobre o `LIVRE` (reativa → `PROP_A` altera gerente→usuario → `ADMIN_A` altera usuario→gerente → autorremove), com restauração obrigatória do baseline e comparação final byte a byte — com restauração de segurança em qualquer falha. Executado e aprovado em 03/09/2026, 18/18 testes — ver 5º incremento. |
+| QA REST — sair da empresa (6º incremento) | `permissoes-15-qa-sair-empresa.js` | Equivalente automatizado do botão "Sair": reativa o `LIVRE`, o próprio `LIVRE` se autorremove (`remover_usuario_empresa`), confirma `ativo=false` na resposta da RPC e por reconsulta independente, e compara o estado final byte a byte contra o baseline inicial — nenhuma reinclusão necessária, já que a autorremoção já restaura o baseline. `TRQ49` não é retestado (coberto por `PROT-01`, Fase 4.2). Executado e aprovado em 05/09/2026, 5/5 testes — ver 6º incremento. |
 | Variável de ambiente | `qa/.env.example` | `QA_PASSWORD_PROPRIETARIO_ANTIGO` (vazia no exemplo) — senha própria da conta reaproveitada como "LIVRE" nesta fase, que não usa a senha compartilhada (`SUPABASE_TEST_PASSWORD`) das demais contas de QA. |
 
 Nenhuma senha, chave ou token aparece neste documento.
@@ -309,6 +349,91 @@ Implementação isolada da lógica de "Adicionar usuário"/"Reativar acesso": `e
 
 Baseline restaurado e confirmado antes da reexecução do QA (ver resultado acima — 18/18 aprovados).
 
+## 6º incremento — sair da empresa
+
+🟢 **Frontend implementado. QA REST 5/5 aprovado. Teste responsivo aprovado. Teste visual do fluxo "Sair da empresa" aprovado. Ainda não commitado/publicado.**
+
+### Investigação (leitura completa, sem alteração)
+
+`remover_usuario_empresa` (`qa/fase-4/scripts/permissoes-03-remover-usuario-empresa.sql`, já publicada na Fase 4.2, sem alteração) **já implementa integralmente** a autorremoção: o passo 6 do corpo da função permite que qualquer usuário remova o próprio vínculo sem checar hierarquia; o passo 7 (proteção do último proprietário, `TRQ49`) vale também em autorremoção, incondicionalmente — já validado no teste `PROT-01` da Fase 4.2. **Nenhuma migração foi necessária para este incremento** — é puramente frontend.
+
+O estado "Sem vínculo" (`iniciarApp()`, quando `vinculos.length === 0` sem cadastro pendente) já existe e já trata corretamente o caso de o usuário sair da única empresa que tinha. `validarEscolhaSalva()` já descarta sozinha, no próximo boot, qualquer escolha de empresa salva em `localStorage` que não corresponda mais a um vínculo ativo — nenhuma limpeza manual adicional foi necessária.
+
+**Limitação arquitetural registrada (não é bug)**: como `incluir_usuario_empresa` (`TRQ28`) e `alterar_papel_usuario_empresa` (`TRQ40`) nunca atribuem o papel `proprietario`, não existe hoje nenhum fluxo para criar um segundo proprietário numa empresa — na prática, o proprietário de uma empresa com fixtures atuais nunca conseguirá sair dela por este incremento (sempre bloqueado por `TRQ49`), até existir um fluxo dedicado de transferência de propriedade (fora de escopo).
+
+### Implementação
+
+- **Botão "Sair"** em cada linha de `renderMinhasEmpresas()` (seção "Minhas empresas", visível para **qualquer papel**, em **qualquer empresa** da lista — não só a atualmente selecionada, diferente da seção "Usuários" que só proprietário/admin veem).
+- **Modal novo** `#overlaySairEmpresa` (`index.html`) — não reaproveita o modal de 3 modos da seção Usuários (título/e-mail/papel não fazem sentido aqui): "Deseja sair desta empresa?", nome da empresa em destaque, Cancelar/Sair, botões bloqueados durante o envio.
+- **Guarda defensiva** `validarSaidaEmpresa(vinculoId)` — confirma que o vínculo ainda está em `vinculosAtivosAtual`, usada na abertura do modal e revalidada imediatamente antes do envio.
+- Chama exclusivamente `remover_usuario_empresa(p_vinculo_id)` com o **próprio** token — sem guarda de hierarquia no frontend, pois o backend também não a aplica em autorremoção.
+- Mapeamento de erros: `TRQ44`, `TRQ46`, `TRQ47`, `TRQ49` (mensagem: "Você é o único proprietário ativo desta empresa. Para evitar que a empresa fique sem responsável, sua saída não é permitida no momento.") e `ESTADO_DESATUALIZADO`.
+- **Sucesso**: só é tratado como tal quando a resposta da RPC confirma o mesmo `vinculo_id`, `empresa_id` e `usuario_id` do vínculo selecionado, além de `ativo=false`; depois disso, `location.reload()` é executado — a aplicação inteira depende de `contextoEmpresa`, e o próximo boot já resolve sozinho para "Sem vínculo" (0 empresas restantes), entra direto (1 restante) ou mostra o seletor (2+ restantes).
+- Proteção contra duplo clique com flag própria (`saindoDaEmpresa`).
+- Ajuste mínimo de CSS: `.minha-empresa-info` (novo wrapper para nome+papel), preservando o layout original e só adicionando o botão "Sair" à direita.
+
+Arquivos alterados: `script.js` (fluxo "Sair da empresa" e controle do drawer móvel), `index.html` (modal de saída, backdrop e atributos de acessibilidade da sidebar) e `style.css` (layout de "Minhas empresas" e regras do drawer em telas ≤820px). Nenhum SQL ou banco foi alterado.
+
+### QA REST — `permissoes-15-qa-sair-empresa.js` — EXECUTADO E APROVADO em 05/09/2026, 5/5 testes
+
+`TRQ49` (proteção do último proprietário ativo em autorremoção) **não foi testado de novo** neste incremento — permanece coberto pelo teste histórico `PROT-01` (Fase 4.2, já aprovado; `remover_usuario_empresa` não mudou desde então). Decisão deliberada: repetir esse teste exigiria `PROP_A` (único proprietário ativo da Empresa A) chamar a RPC sobre o próprio vínculo — se houvesse uma regressão não detectada, essa chamada poderia desativar o único proprietário ativo, e hoje não existe nenhum caminho seguro de restauração automática (não há fluxo de transferência de propriedade, nem forma de reativar um vínculo `proprietario`, já que `incluir_usuario_empresa`/`TRQ28` e `alterar_papel_usuario_empresa`/`TRQ40` bloqueiam incondicionalmente atribuir esse papel).
+
+| Teste | Resultado |
+|---|---|
+| `BASELINE-01` (4 vínculos, `LIVRE` gerente/inativo) | ✅ Aprovado |
+| `REATIVAR-01` (`PROP_A` reativa `LIVRE` como gerente) | ✅ Aprovado |
+| `SAIR-LIVRE-01` (`LIVRE` se autorremove; `ativo=false` confirmado na própria resposta da RPC) | ✅ Aprovado |
+| `CONF-01` (reconsulta independente: `LIVRE` gerente/inativo, `vinculo_id`/`criado_em` preservados) | ✅ Aprovado |
+| `FINAL-01` (estado final byte a byte idêntico ao baseline inicial) | ✅ Aprovado |
+
+**5/5 aprovados, 0 reprovados.** `LIVRE` terminou `gerente`/inativo, com `vinculo_id` e `criado_em` idênticos ao baseline inicial; `PROP_A`, `ADMIN_A` e `USUARIO_A` confirmados inalterados; estado final dos 4 vínculos da Empresa A idêntico byte a byte ao baseline capturado em `BASELINE-01`. Nenhuma falha ocorreu — a rotina de restauração de emergência (`falhaComRestauracao()`/`restaurarLivre()`) **não foi acionada**; `SAIR-LIVRE-01` foi a própria etapa planejada do fluxo, não uma correção.
+
+Durante a preparação do teste visual (checagem em 768px), foram encontrados e corrigidos defeitos de responsividade **pré-existentes na sidebar**, não relacionados à lógica de "Sair da empresa" em si (ver seções seguintes). O teste visual específico do ciclo do `LIVRE` foi concluído em seguida (ver "Teste visual do fluxo 'Sair da empresa'" mais abaixo).
+
+### Defeito de responsividade encontrado e corrigido (sidebar em telas ≤820px)
+
+**Sintomas observados** (captura em 768px, seção Configurações): botão de recolher/expandir a sidebar aparecia mas não tinha efeito visível; existia rolagem horizontal na parte inferior da aplicação; o botão "Sair da conta" não aparecia. Investigação separada confirmou que o botão "Sair" de "Minhas empresas" (6º incremento) e a ausência de "Trocar empresa" (conta com 1 único vínculo) eram comportamento correto, não bugs.
+
+**Causa raiz**: `style.css`, dentro de `@media(max-width:820px)`, continha a regra `.brand-name,.brand-sub,.nav-label,#empresaNomeLabel,.logout-btn,.trocar-empresa-label{display:none;}` — seletores soltos, **sem depender da classe `.collapsed`** que o JavaScript (`aplicarEstadoSidebar()`) alterna corretamente. Isso escondia esses elementos incondicionalmente abaixo de 820px, tornando o botão de recolher/expandir sem efeito visível (a única mudança real era a largura da sidebar, 70px↔64px, imperceptível) e deixando "Sair da conta" permanentemente inacessível nessa faixa — um beco sem saída, diferente do desktop, onde reexpandir a sidebar sempre trazia o botão de volta.
+
+A hipótese de rolagem horizontal causada pelo `finance-banner-grid` (breakpoint 760px vs. 820px) foi **descartada por evidência concreta**: diagnóstico no Console em 768px (`document.documentElement.scrollWidth`, `document.body.scrollWidth`, `querySelectorAll('body *')` filtrando elementos que ultrapassam a viewport) confirmou `viewport = htmlScrollWidth = bodyScrollWidth = 768`, sem nenhum elemento excedendo a tela — não havia overflow horizontal global no documento; a barra observada na captura original pertencia ao modo de redimensionamento do Chrome, não à aplicação. Por isso, `min-width:0` e o realinhamento do breakpoint do `finance-banner-grid` **não foram aplicados** — não havia defeito real a corrigir ali.
+
+### Correção aplicada — sidebar móvel em formato drawer (gaveta)
+
+Implementada uma sidebar expansível para telas ≤820px, mantendo o modo compacto (só ícones) como padrão:
+- **Fechada** (padrão): sidebar compacta de 70px no fluxo normal do layout — comportamento pré-existente, inalterado.
+- **Aberta**: `.sidebar.mobile-expanded` vira `position:fixed`, 220px, sobreposta ao conteúdo (`z-index:46`, abaixo do `z-index:50` dos modais) — como sai do fluxo normal do flexbox, `.main` nunca é redimensionado nem empurrado. Mostra nome da empresa, textos do menu, "Trocar" (quando aplicável) e "Sair da conta".
+- **Backdrop** (`#sidebarBackdrop`, `z-index:45`): escurece o restante da tela quando o drawer está aberto; clicar nele fecha o drawer.
+- **Fecha em 4 situações**: clique no backdrop, tecla `Escape`, seleção de qualquer item do menu (fecha e troca de aba), e ao cruzar o breakpoint de 820px durante um redimensionamento da janela (evita um drawer "preso" aberto).
+- **Estado do drawer mobile é totalmente separado do `collapsed` do desktop** — nunca persiste em `localStorage` (é uma gaveta de navegação transitória, não uma preferência de longo prazo); o modo desktop (`aplicarEstadoSidebar()`, recolhido/expandido, persistido em `torque_sidebar_recolhida`) permanece com o comportamento e os textos exatamente como antes, sem nenhuma mudança acima de 820px.
+- **Acessibilidade**: `#btnToggleSidebar` ganhou `aria-controls="sidebar"`; `aria-expanded` alternando `"true"`/`"false"` conforme o estado (desktop ou mobile); `aria-label` e `title` alternando entre os pares "Recolher menu"/"Expandir menu" (desktop, inalterado) e "Fechar menu"/"Abrir menu" (mobile, novo).
+
+Arquivos alterados: `index.html` (backdrop novo, atributos de acessibilidade no botão existente), `style.css` (regras novas só dentro de `@media(max-width:820px)` — zero regra nova acima disso), `script.js` (segundo modo de estado da sidebar, guiado por `matchMedia('(max-width: 820px)')`, mais os 4 listeners de fechamento). Nenhuma alteração em SQL ou banco.
+
+### Teste visual responsivo — APROVADO (768px, 390px e desktop >820px)
+
+Confirmado pelo usuário: sidebar compacta inicialmente; drawer abre sobre o conteúdo sem empurrar `.main`; textos, nome da empresa e "Sair da conta" aparecem; backdrop funciona; fechamento por backdrop, por `Escape` e por seleção de item do menu funcionam; comportamento responsivo correto em 768px e 390px; em 768px, `viewport`/`htmlScrollWidth`/`bodyScrollWidth` = 768 (sem rolagem horizontal global). No desktop (>820px): recolher/expandir preservado, preferência `collapsed` persiste após reload, nenhum backdrop aparece, Console sem erros.
+
+**Ocorrência registrada, sem impacto e fora de escopo**: `GET /favicon.ico 404 (Not Found)` no Console — recurso independente e pré-existente (não há `favicon.ico` no projeto), sem relação com a sidebar ou com o 6º incremento. Não corrigido nesta rodada.
+
+### Teste visual do fluxo "Sair da empresa" (ciclo do `LIVRE`) — APROVADO
+
+**Baseline preparatório — duas divergências encontradas e corrigidas manualmente antes do ciclo real**: durante a preparação, uma checagem somente leitura revelou que o teste manual do 5º incremento havia sido feito com contas incorretas, deixando `USUARIO_A` (`torque.usuario.teste@gmail.com`) em `gerente`/ativo (deveria ser `usuario`/ativo) e `ADMIN_A` (`torque.admin.teste@gmail.com`) em `admin`/**inativo** (deveria ser `admin`/ativo). `USUARIO_A` foi restaurado manualmente para `usuario`/ativo e `ADMIN_A` foi reativado manualmente como `admin`/ativo. O `LIVRE` permaneceu `gerente`/inativo, sem alteração, até o início do ciclo correto abaixo.
+
+**Preparação correta**: `LIVRE` (`weversonantonio27+torqueqa@gmail.com` — confirmado como o único e-mail usado, distinto de `torque.usuario.teste@gmail.com`) reativado como `gerente`/ativo.
+
+**Modal**: botão "Sair" apareceu corretamente na Empresa A; título, nome da empresa, Cancelar e Sair corretos; Cancelar fechou o modal sem nenhuma chamada a `remover_usuario_empresa`.
+
+**Teste real**: duplo clique no botão "Sair" — Network mostrou um preflight `OPTIONS` e **exatamente um** `fetch` funcional a `remover_usuario_empresa`, `HTTP 200`. Resposta confirmada: `vinculo_id=3a24fbb6-950e-463d-801d-fe529a2ffb34`, `empresa_id=670162c6-3437-4cd5-b581-0229d57d33e2`, `usuario_id=947b3c76-7be2-4760-895f-3dfdccb215ca`, `papel=gerente`, `ativo=false`. `location.reload()` automático confirmado; tela **"Sem vínculo"** confirmada.
+
+**Baseline final confirmado visualmente**: `PROP_A` proprietario/ativo; `ADMIN_A` admin/ativo; `USUARIO_A` usuario/ativo; `LIVRE` gerente/inativo.
+
+**`TRQ49` não foi executado visualmente** — permanece coberto pelo teste histórico `PROT-01` (Fase 4.2), mesmo raciocínio já registrado para o QA REST.
+
+**Cenários de 1 e 2+ vínculos restantes** continuam validados somente pela lógica pré-existente do código (`iniciarApp()`), sem criação de fixtures adicionais.
+
+**Console**: sem erro funcional relacionado ao incremento; único registro é o `favicon.ico 404` já documentado (ocorrência pré-existente, fora de escopo).
+
 ## Cargo, admissão, desligamento e recontratação — investigação e decisões
 
 🟡 **REQUISITO REGISTRADO. Investigação somente leitura (baseada em código/documentação, sem conferência ao vivo do catálogo) concluída. Decisões de escopo confirmadas pelo usuário. Nenhum SQL ou frontend criado nesta fase.**
@@ -350,9 +475,14 @@ Baseline restaurado e confirmado antes da reexecução do QA (ver resultado acim
 - ~~Implementar o frontend do 5º incremento ("Alterar papel").~~ 🟢 Concluído — implementado, teste visual aprovado em 03/09/2026 para `PROP_A` e `ADMIN_A`.
 - ~~Investigar/restaurar o baseline do `LIVRE`~~ 🟢 Concluído em 03/09/2026 — restauração controlada (autorremoção via `remover_usuario_empresa`), confirmada por leitura independente antes/depois (`vinculo_id`/`criado_em` preservados, `ativo=false`, 4 vínculos, `PROP_A`/`ADMIN_A`/`USUARIO_A` inalterados).
 - ~~Reexecutar `permissoes-14-qa-alterar-papel.js` (QA REST com escrita controlada, restauração obrigatória do baseline).~~ 🟢 Concluído em 03/09/2026 — 18/18 testes aprovados, baseline restaurado e confirmado por conferência independente.
-- Commit e push do 5º incremento (frontend + `permissoes-13` já aplicada no Supabase + `permissoes-14`).
-- Fluxo separado de saída do próprio proprietário.
-- Cargo, admissão, desligamento e recontratação — requisito registrado, análise somente leitura pendente (ver seção dedicada).
+- ~~Commit e push do 5º incremento (frontend + `permissoes-13` já aplicada no Supabase + `permissoes-14`).~~ 🟢 Concluído — publicado em 03/09/2026, commit `39bd0ef`.
+- ~~Implementar o frontend do 6º incremento ("Sair da empresa").~~ 🟢 Concluído — implementado, aguardando teste visual.
+- ~~Teste visual responsivo da sidebar (768px, 390px, desktop >820px).~~ 🟢 Concluído — aprovado; defeito pré-existente de responsividade encontrado e corrigido (drawer móvel, ver seção acima).
+- ~~Teste visual específico do ciclo do `LIVRE` (Cancelar, duplo clique, Console, Network, `vinculo_id`, `empresa_id`, `usuario_id` e `ativo=false` confirmados no retorno da RPC, tela "Sem vínculo", conferência final do baseline).~~ 🟢 Concluído e aprovado — ver 6º incremento (inclui a correção manual de duas divergências encontradas em `USUARIO_A`/`ADMIN_A`, causadas pelo teste manual do 5º incremento).
+- ~~QA REST do 6º incremento (com escrita controlada, usando o `LIVRE`).~~ 🟢 Concluído em 05/09/2026 — 5/5 testes aprovados, baseline restaurado (autorremoção já restaura, sem reinclusão).
+- Commit e push do 6º incremento.
+- Transferência de propriedade (permitiria a um proprietário sair de uma empresa) — não implementada, fora de escopo até aqui.
+- Cargo, admissão, desligamento e recontratação — investigação somente leitura concluída; implementação futura pendente (ver seção dedicada).
 - Regressão das Fases 2.5 e 3.
 
 ## Restrições

@@ -60,8 +60,9 @@
 </div>
 
 <div id="appScreen" class="app hidden">
+  <div class="sidebar-backdrop hidden" id="sidebarBackdrop"></div>
   <div class="sidebar" id="sidebar">
-    <button class="sidebar-toggle" id="btnToggleSidebar" title="Recolher menu">‹</button>
+    <button class="sidebar-toggle" id="btnToggleSidebar" title="Recolher menu" aria-label="Recolher menu" aria-controls="sidebar" aria-expanded="true">‹</button>
     <div class="brand">
       <div class="brand-mark">T</div>
       <div><div class="brand-name">Torque.Tec</div><div class="brand-sub">Gestão que move seu negócio</div></div>
@@ -449,6 +450,17 @@
   <div class="modal-actions">
     <button type="button" class="btn" id="removerUsuarioCancelarBtn">Cancelar</button>
     <button type="button" class="btn btn-primary" id="removerUsuarioConfirmarBtn">Remover acesso</button>
+  </div>
+</div></div>
+
+<div class="overlay" id="overlaySairEmpresa"><div class="modal">
+  <h3>Sair da empresa</h3>
+  <div id="sairEmpresaError" class="auth-error hidden"></div>
+  <p>Deseja sair desta empresa?</p>
+  <p class="usuarios-empresa-alvo-email" id="sairEmpresaNomeAlvo"></p>
+  <div class="modal-actions">
+    <button type="button" class="btn" id="sairEmpresaCancelarBtn">Cancelar</button>
+    <button type="button" class="btn btn-primary" id="sairEmpresaConfirmarBtn">Sair</button>
   </div>
 </div></div>
 

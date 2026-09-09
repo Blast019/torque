@@ -33,6 +33,8 @@ let vinculoIdParaRemover = null;
 let removendoUsuarioEmpresa = false;
 let vinculoIdParaReativar = null;
 let vinculoIdParaAlterarPapel = null;
+let vinculoIdParaSairEmpresa = null;
+let saindoDaEmpresa = false;
 
 // ---------------- AUTH ----------------
 function alternarModoAuth(){
@@ -1858,16 +1860,86 @@ function renderPecas(){
 // ---------------- BARRA LATERAL ----------------
 const sidebarEl = document.getElementById('sidebar');
 const btnToggleSidebar = document.getElementById('btnToggleSidebar');
+const sidebarBackdrop = document.getElementById('sidebarBackdrop');
+const mqSidebarMobile = window.matchMedia('(max-width: 820px)');
+
+function sidebarEmModoMobile(){
+  return mqSidebarMobile.matches;
+}
+
+// Desktop (>820px): recolhido/expandido, preferência persistida em
+// localStorage - comportamento e textos idênticos aos de antes desta
+// alteração.
 function aplicarEstadoSidebar(recolhida){
   sidebarEl.classList.toggle('collapsed', recolhida);
   btnToggleSidebar.textContent = recolhida ? '›' : '‹';
-  btnToggleSidebar.title = recolhida ? 'Expandir menu' : 'Recolher menu';
+  const titulo = recolhida ? 'Expandir menu' : 'Recolher menu';
+  btnToggleSidebar.title = titulo;
+  btnToggleSidebar.setAttribute('aria-label', titulo);
+  btnToggleSidebar.setAttribute('aria-expanded', recolhida ? 'false' : 'true');
 }
-aplicarEstadoSidebar(localStorage.getItem('torque_sidebar_recolhida') === '1');
+
+// Mobile (<=820px): fechado (compacto, já existente)/aberto (drawer sobre
+// o conteúdo) - estado independente do desktop, nunca persistido em
+// localStorage (é uma gaveta de navegação transitória, não uma preferência).
+function aplicarEstadoSidebarMobile(aberta){
+  sidebarEl.classList.toggle('mobile-expanded', aberta);
+  sidebarBackdrop.classList.toggle('hidden', !aberta);
+  const titulo = aberta ? 'Fechar menu' : 'Abrir menu';
+  btnToggleSidebar.title = titulo;
+  btnToggleSidebar.setAttribute('aria-label', titulo);
+  btnToggleSidebar.setAttribute('aria-expanded', aberta ? 'true' : 'false');
+}
+
+function fecharSidebarMobile(){
+  if(sidebarEl.classList.contains('mobile-expanded')) aplicarEstadoSidebarMobile(false);
+}
+
+// Estado inicial: decide entre os dois modos conforme a largura atual da
+// tela no carregamento - nunca aplica o `collapsed` do desktop em mobile.
+if(sidebarEmModoMobile()){
+  aplicarEstadoSidebarMobile(false);
+} else {
+  aplicarEstadoSidebar(localStorage.getItem('torque_sidebar_recolhida') === '1');
+}
+
 btnToggleSidebar.addEventListener('click', ()=>{
-  const recolhida = !sidebarEl.classList.contains('collapsed');
-  aplicarEstadoSidebar(recolhida);
-  localStorage.setItem('torque_sidebar_recolhida', recolhida ? '1' : '0');
+  if(sidebarEmModoMobile()){
+    const aberta = !sidebarEl.classList.contains('mobile-expanded');
+    aplicarEstadoSidebarMobile(aberta);
+  } else {
+    const recolhida = !sidebarEl.classList.contains('collapsed');
+    aplicarEstadoSidebar(recolhida);
+    localStorage.setItem('torque_sidebar_recolhida', recolhida ? '1' : '0');
+  }
+});
+
+// Fecha ao clicar no fundo escurecido.
+sidebarBackdrop.addEventListener('click', fecharSidebarMobile);
+
+// Fecha ao pressionar Escape.
+document.addEventListener('keydown', (e)=>{
+  if(e.key === 'Escape') fecharSidebarMobile();
+});
+
+// Fecha ao selecionar qualquer item do menu (o próprio botão já troca de
+// aba normalmente através do listener já existente em .nav-item - este é
+// só um efeito colateral adicional, específico do drawer mobile).
+document.querySelectorAll('.nav-item').forEach(item=>{
+  item.addEventListener('click', fecharSidebarMobile);
+});
+
+// Fecha e resincroniza ao cruzar o breakpoint de 820px durante um resize -
+// evita um drawer "aberto" preso ao alternar para desktop, e garante que o
+// modo mobile nunca herde o `collapsed` do desktop.
+mqSidebarMobile.addEventListener('change', (e)=>{
+  if(e.matches){
+    sidebarEl.classList.remove('collapsed');
+    aplicarEstadoSidebarMobile(false);
+  } else {
+    fecharSidebarMobile();
+    aplicarEstadoSidebar(localStorage.getItem('torque_sidebar_recolhida') === '1');
+  }
 });
 
 // ---------------- NOVA EMPRESA (usuário já autenticado) ----------------
@@ -1880,16 +1952,129 @@ function renderMinhasEmpresas(){
   vinculosAtivosAtual.forEach(vinculo=>{
     const item = document.createElement('div');
     item.className = 'minha-empresa-item' + (vinculo.empresa_id === contextoEmpresa.empresaId ? ' ativa' : '');
+
+    const info = document.createElement('div');
+    info.className = 'minha-empresa-info';
     const nomeEl = document.createElement('span');
     nomeEl.textContent = vinculo.empresa.nome;
     const papelEl = document.createElement('span');
     papelEl.className = 'minha-empresa-papel';
     papelEl.textContent = vinculo.papel;
-    item.appendChild(nomeEl);
-    item.appendChild(papelEl);
+    info.appendChild(nomeEl);
+    info.appendChild(papelEl);
+    item.appendChild(info);
+
+    // "Sair" disponível para qualquer papel, em qualquer empresa da lista
+    // (não só a empresa atualmente selecionada) - a RPC permite
+    // autorremoção sem checar hierarquia; a única restrição (último
+    // proprietário ativo, TRQ49) é aplicada pelo próprio backend.
+    const sairBtn = document.createElement('button');
+    sairBtn.type = 'button';
+    sairBtn.className = 'btn btn-ghost btn-sm';
+    sairBtn.textContent = 'Sair';
+    sairBtn.addEventListener('click', ()=>abrirConfirmacaoSairEmpresa(vinculo.id));
+    item.appendChild(sairBtn);
+
     lista.appendChild(item);
   });
 }
+
+// Guarda defensiva de frontend (NÃO substitui a segurança real, que é da
+// RPC remover_usuario_empresa): confirma que o vínculo ainda está entre
+// vinculosAtivosAtual antes de abrir o modal e imediatamente antes do
+// envio - reduz o risco de agir sobre um vínculo já removido/desatualizado.
+function validarSaidaEmpresa(vinculoId){
+  if(!vinculoId) return null;
+  return vinculosAtivosAtual.find(v=>v.id === vinculoId) || null;
+}
+
+function abrirConfirmacaoSairEmpresa(vinculoId){
+  const alvo = validarSaidaEmpresa(vinculoId);
+  if(!alvo) return;
+  vinculoIdParaSairEmpresa = vinculoId;
+  document.getElementById('sairEmpresaNomeAlvo').textContent = alvo.empresa.nome;
+  document.getElementById('sairEmpresaError').classList.add('hidden');
+  document.getElementById('sairEmpresaConfirmarBtn').disabled = false;
+  document.getElementById('sairEmpresaCancelarBtn').disabled = false;
+  openModal('overlaySairEmpresa');
+}
+document.getElementById('sairEmpresaCancelarBtn').addEventListener('click', ()=>{
+  if(saindoDaEmpresa) return;
+  vinculoIdParaSairEmpresa = null;
+  closeModal('overlaySairEmpresa');
+});
+
+function mostrarErroSairEmpresa(erro){
+  const el = document.getElementById('sairEmpresaError');
+  const codigo = erro && erro.code;
+  const mensagens = {
+    TRQ44: 'Não foi possível identificar o vínculo. Atualize a página e tente novamente.',
+    TRQ46: 'Este vínculo já está inativo. Atualize a página.',
+    TRQ47: 'Vínculo não encontrado. Atualize a página e tente novamente.',
+    TRQ49: 'Você é o único proprietário ativo desta empresa. Para evitar que a empresa fique sem responsável, sua saída não é permitida no momento.',
+    ESTADO_DESATUALIZADO: 'Este vínculo não está mais disponível. Atualize a página e tente novamente.'
+  };
+  el.textContent = mensagens[codigo] || 'Não foi possível sair da empresa agora. Tente novamente.';
+  el.classList.remove('hidden');
+}
+
+document.getElementById('sairEmpresaConfirmarBtn').addEventListener('click', async ()=>{
+  if(saindoDaEmpresa || !vinculoIdParaSairEmpresa) return;
+
+  // Revalidação defensiva imediatamente antes de chamar a RPC - o
+  // resultado é preservado em alvo para conferir a resposta da RPC depois.
+  const alvo = validarSaidaEmpresa(vinculoIdParaSairEmpresa);
+  if(!alvo){
+    mostrarErroSairEmpresa({ code: 'ESTADO_DESATUALIZADO' });
+    return;
+  }
+
+  const confirmarBtn = document.getElementById('sairEmpresaConfirmarBtn');
+  const cancelarBtn = document.getElementById('sairEmpresaCancelarBtn');
+  saindoDaEmpresa = true;
+  confirmarBtn.disabled = true;
+  cancelarBtn.disabled = true;
+
+  try{
+    const { data: resultadoRpc, error } = await sb.rpc('remover_usuario_empresa', {
+      p_vinculo_id: vinculoIdParaSairEmpresa
+    });
+
+    if(error){
+      mostrarErroSairEmpresa(error);
+      return;
+    }
+
+    const resultado = Array.isArray(resultadoRpc) ? resultadoRpc[0] : resultadoRpc;
+    // Só é tratado como sucesso se a RPC confirmar o MESMO vínculo (id,
+    // empresa e usuário) e ativo=false - nunca confia só em ativo=false
+    // isoladamente.
+    if(
+      !resultado ||
+      resultado.vinculo_id !== alvo.id ||
+      resultado.empresa_id !== alvo.empresa_id ||
+      resultado.usuario_id !== alvo.usuario_id ||
+      resultado.ativo !== false
+    ){
+      mostrarErroSairEmpresa({ code: null });
+      return;
+    }
+
+    // Sucesso confirmado pela própria resposta da RPC (mesmo vínculo,
+    // ativo=false). Recarrega a página inteira: praticamente todo o
+    // estado da aplicação depende de contextoEmpresa, e
+    // validarEscolhaSalva() já descarta sozinha, no próximo boot, qualquer
+    // escolha salva que não corresponda mais a um vínculo ativo - sem
+    // necessidade de limpeza manual aqui.
+    location.reload();
+  } catch(erroInesperado){
+    mostrarErroSairEmpresa({ code: null });
+  } finally {
+    saindoDaEmpresa = false;
+    confirmarBtn.disabled = false;
+    cancelarBtn.disabled = false;
+  }
+});
 
 function usuarioPodeGerenciarVinculos(){
   return !!contextoEmpresa && ['proprietario', 'admin'].includes(contextoEmpresa.papel);
