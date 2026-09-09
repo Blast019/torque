@@ -1,6 +1,6 @@
 # Fase 4 — Usuários e Permissões
 
-Última atualização: 2026-09-05
+Última atualização: 2026-09-09
 
 ## Checkpoint da sessão (05/09/2026) — ler antes de continuar
 
@@ -484,6 +484,32 @@ Confirmado pelo usuário: sidebar compacta inicialmente; drawer abre sobre o con
 - Transferência de propriedade (permitiria a um proprietário sair de uma empresa) — não implementada, fora de escopo até aqui.
 - Cargo, admissão, desligamento e recontratação — investigação somente leitura concluída; implementação futura pendente (ver seção dedicada).
 - Regressão das Fases 2.5 e 3.
+
+**Requisito registrado para planejamento futuro (09/09/2026):** Central de Avisos da Plataforma, submódulo do Painel Administrativo Central — registrada como Fase 5.4, detalhada em `qa/fase-5/STATUS.md`. Nenhuma implementação iniciada; depende de 5.1 (restrição de acesso) e 5.2 (assinaturas e pagamentos), ambas já detalhadas em `qa/fase-5/STATUS.md`.
+
+## Requisitos registrados para planejamento futuro (09/09/2026) — sem implementação
+
+### Recuperação de senha
+
+🔵 **REQUISITO REGISTRADO. Nenhuma implementação iniciada.**
+
+- Opção "Esqueci minha senha" na tela de login.
+- Envio seguro do processo de redefinição.
+- Links temporários e de uso único.
+- Não revelar se determinado e-mail está cadastrado (mensagem de retorno idêntica independente de o e-mail existir ou não).
+- Invalidar ou controlar sessões conforme a futura política de segurança (ainda a ser definida).
+
+### Transferência de titularidade
+
+🔵 **REQUISITO REGISTRADO. Nenhuma implementação iniciada.** Conecta-se diretamente à regra já vigente de que o último proprietário ativo não pode sair da empresa (`TRQ49`, ver `remover_usuario_empresa` no 6º incremento) — hoje isso é uma limitação sem saída, porque não existe forma de promover um segundo proprietário.
+
+- O último proprietário não pode sair (regra já vigente, `TRQ49`).
+- Permitir cadastrar ou promover outro proprietário — hoje impossível: `incluir_usuario_empresa` (`TRQ28`) e `alterar_papel_usuario_empresa` (`TRQ40`) bloqueiam incondicionalmente atribuir o papel `proprietario`.
+- Criar fluxo explícito de transferência de titularidade.
+- Exigir confirmação das partes, conforme regra ainda a ser definida.
+- Manter pelo menos um proprietário ativo em todo momento da transferência.
+- Registrar histórico e auditoria da transferência.
+- Somente após a transferência, permitir a saída do proprietário anterior (via "Sair da empresa", já implementado no 6º incremento).
 
 ## Restrições
 
