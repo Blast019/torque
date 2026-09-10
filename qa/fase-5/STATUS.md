@@ -1,8 +1,158 @@
 # Fase 5 — SaaS / Administração
 
-Última atualização: 2026-09-09
+Última atualização: 2026-09-10
 
-🔵 **FASE EM PLANEJAMENTO. Nenhum incremento desta fase foi implementado ainda** (nenhum código, banco de dados ou frontend). Este documento existe, por enquanto, só para registrar requisitos futuros e suas dependências, na mesma lógica dos demais `STATUS.md` do projeto.
+## Checkpoint de 10/09/2026 — Incremento 1: onboarding autorizado por convite (Alternativa A)
+
+🔵 **SOMENTE PLANEJADO. Nenhuma implementação foi realizada** — nenhum arquivo, código, banco de dados, configuração de Auth ou remoto foi alterado até este checkpoint. Esta seção consolida, por escrito, a Proposta Técnica v4 do Incremento 1 discutida em sessões anteriores (que até agora só existia em histórico de conversa) e o resultado da auditoria de pré-implementação feita em 10/09/2026.
+
+### Estado do Git auditado nesta data
+
+```
+branch: main
+HEAD = origin/main = 89380e95bf0bc3302664e2bff0a9adb844952210
+Modificado: só CNAME (pré-existente, fora de escopo)
+Staged: nenhum arquivo
+```
+
+### Direção arquitetural
+
+Restringir a criação de qualquer empresa nova (primeiro cadastro ou empresa adicional) a um **portão único de autorização administrativa da plataforma**, usando o mecanismo nativo de convite do Supabase Auth (`inviteUserByEmail`) como prova de posse do e-mail para contas novas — **sem criar um token de convite próprio do Torque**, já que a sessão autenticada nativa (aceite de convite, ou login normal para quem já tem conta) já é prova suficiente.
+
+### Achado crítico do frontend atual (confirmado por leitura de código, não presumido)
+
+`script.js` tem um boot-time check (`sb.auth.getSession()`, linhas 126-127) que chama `iniciarApp()` direto se houver sessão — **sem nenhum tratamento de `onAuthStateChange`, `PASSWORD_RECOVERY`, `type=invite` ou `type=recovery`, e sem nenhuma tela de "Defina sua senha"**. O único `updateUser({...})` existente (linha 389) só limpa metadata de cadastro pendente, não define senha. **Se um convite nativo fosse aceito hoje, a pessoa cairia direto no estado "Sem vínculo", sem chance de definir senha ou preencher os dados da empresa.** Isso precisa ser construído como parte do Incremento 1, não presumido como "resolvido pelo Supabase".
+
+### Modelagem de banco proposta (não executada)
+
+**Tabela `autorizacoes_onboarding`** — só autorização administrativa + estado; não é um convite em si (o convite/prova de posse do e-mail é nativo do Supabase):
+
+```sql
+create table public.autorizacoes_onboarding (
+  id                        uuid primary key default gen_random_uuid(),
+  email                     text not null,
+  autorizado_por            uuid not null references auth.users(id),
+  autorizado_em             timestamptz not null default now(),
+  expira_em                 timestamptz not null,
+  consumido_em              timestamptz,
+  consumido_por             uuid references auth.users(id),
+  consumido_para_empresa_id uuid,
+  revogado_em               timestamptz,
+  revogado_por              uuid references auth.users(id),
+  constraint autorizacoes_onboarding_email_normalizado check (email = lower(btrim(email))),
+  constraint autorizacoes_onboarding_expira_apos_autorizado check (expira_em > autorizado_em)
+);
+
+create unique index autorizacoes_onboarding_email_pendente_uniq
+  on public.autorizacoes_onboarding (email)
+  where consumido_em is null and revogado_em is null;
+
+alter table public.autorizacoes_onboarding enable row level security;
+-- Sem nenhuma policy — nenhuma linha visível/gravável por anon/authenticated.
+revoke all on public.autorizacoes_onboarding from public, anon, authenticated;
+grant select, insert, update on public.autorizacoes_onboarding to service_role;
+alter table public.autorizacoes_onboarding owner to postgres;
+```
+
+Pontos de design consolidados:
+- **`email` normalizado por `CHECK`** (`email = lower(btrim(email))`) — o banco rejeita qualquer gravação não normalizada, não depende só de convenção manual.
+- **Índice único parcial** (`WHERE consumido_em IS NULL AND revogado_em IS NULL`) — garante no máximo uma autorização pendente por e-mail, incluído desde a implantação (não fica para depois). Consequência: o procedimento de emissão é **obrigado** a revogar qualquer pendência expirada do mesmo e-mail antes de inserir uma nova, ou o `INSERT` falha por violação de unicidade.
+- **`consumido_para_empresa_id`** — corrige uma falha crítica encontrada na v3: sem essa coluna, o mesmo usuário poderia consumir a autorização uma vez e depois criar empresas adicionais ilimitadas com `p_empresa_id` diferentes. Com ela, o replay só é aceito quando **autorização, usuário e `p_empresa_id` são todos iguais** à primeira consumação.
+- Sem `citext`, sem extensão nova, sem `CHECK` fixando um UUID de operador (ver seção de procedimento manual abaixo).
+
+### RPCs propostas (não executadas)
+
+**`criar_empresa_autorizada(p_empresa_id uuid, p_nome_empresa text, p_cnpj_empresa text, p_telefone_empresa text)`** — substitui as duas RPCs existentes (`criar_empresa_com_vinculo` e `criar_nova_empresa_com_vinculo`), eliminando o conceito de "empresa de origem" (a autorização por e-mail passa a ser o único portão, independente de vínculos existentes em outras empresas — preserva multiempresa). Lógica central:
+1. Autenticação (`TRQ50` se `auth.uid()` nulo).
+2. Validação de entrada (`TRQ51`).
+3. Consumo atômico e idempotente da autorização, por e-mail da sessão **e** `p_empresa_id`:
+   ```sql
+   update public.autorizacoes_onboarding
+      set consumido_em = coalesce(consumido_em, now()),
+          consumido_por = coalesce(consumido_por, v_usuario_id),
+          consumido_para_empresa_id = coalesce(consumido_para_empresa_id, p_empresa_id)
+    where email = v_email_atual
+      and revogado_em is null
+      and ( (consumido_em is null and expira_em > now())
+            or (consumido_por = v_usuario_id and consumido_para_empresa_id = p_empresa_id) )
+   returning id into v_autorizacao_id;
+   -- v_autorizacao_id null => TRQ52 (sem_autorizacao)
+   ```
+4. Lock consultivo por usuário (mesmo padrão das demais RPCs do projeto).
+5. Replay idempotente por `p_empresa_id` (mesmo dono + vínculo proprietário ativo correspondente) ou criação real (`INSERT` em `empresas` + `usuarios_empresas`).
+6. `unique_violation` tratado por constraint específica via `GET STACKED DIAGNOSTICS` — só classifica como `TRQ53` (id reutilizado) quando a constraint é `empresas_pkey`; qualquer outra violação de unicidade cai em `TRQ54` (mensagem genérica, sem expor nome de constraint ao chamador).
+
+`SET search_path = ''`, `SECURITY DEFINER`, owner `postgres`, `REVOKE ALL FROM PUBLIC, anon`, `GRANT EXECUTE` só para `authenticated`/`service_role`.
+
+**`existe_autorizacao_onboarding_pendente()`** — RPC de leitura auxiliar, retorna só um `boolean` (sem dado sensível), para o frontend saber se deve oferecer "criar empresa autorizada" a um usuário já existente (que não passa pelo fluxo de convite, e por isso não tem outro jeito de descobrir isso, já que a tabela não é legível por `authenticated`).
+
+**Códigos de erro reservados**: `TRQ50` nao_autenticado, `TRQ51` entrada_invalida, `TRQ52` sem_autorizacao, `TRQ53` operacao_nao_permitida (colisão de id), `TRQ54` conflito_dados (qualquer outra violação de unicidade). Confirmados livres por leitura de todos os `STATUS.md` do projeto.
+
+**Idempotência — regra final**: só é aceito como replay quando autorização, usuário **e** `p_empresa_id` coincidem todos com a primeira consumação bem-sucedida. Qualquer chamada do mesmo usuário com um `p_empresa_id` diferente, depois da autorização já consumida, é recusada (`TRQ52`).
+
+### Fechamento das RPCs antigas — sem janela vulnerável
+
+Na **mesma migração** que cria a tabela e a nova RPC: `REVOKE EXECUTE` de `criar_empresa_com_vinculo(text,text,text)` e `criar_nova_empresa_com_vinculo(uuid,text,text,text,uuid)` do role `authenticated`. Isso aceita uma indisponibilidade temporária **só de criação de empresa** (nunca de login ou uso das empresas existentes) entre essa migração e a publicação do frontend novo — preferível a manter uma rota desprotegida via REST. O `DROP` definitivo das duas assinaturas fica para depois, como limpeza, quando já não há grant nenhum.
+
+### Procedimento manual de autorização (sem painel, validade de 72 horas)
+
+Sem `CHECK` fixando um UUID de operador (removido da v3 — decisão explícita) — a proteção real é a tabela ser totalmente inacessível a `anon`/`authenticated`. O procedimento inclui uma conferência visual do operador antes do `INSERT`:
+
+```sql
+-- 0) Conferir visualmente que o UUID é o do operador correto:
+select id, email from auth.users where id = '<uuid do operador>';
+
+-- 1) Revogar qualquer pendência expirada do mesmo e-mail (o índice único exige isso):
+update public.autorizacoes_onboarding
+   set revogado_em = now(), revogado_por = '<uuid do operador>'
+ where email = lower(btrim('<email>')) and consumido_em is null and revogado_em is null and expira_em <= now();
+
+-- 2) Inserir a nova autorização (validade proposta: 72 horas):
+insert into public.autorizacoes_onboarding (email, autorizado_por, expira_em)
+values (lower(btrim('<email>')), '<uuid do operador>', now() + interval '72 hours');
+```
+
+### Sequência consolidada de implantação
+
+1. Migração única: tabela + índice + `CHECK`s + nova RPC + RPC de leitura auxiliar + `REVOKE EXECUTE` das RPCs antigas.
+2. Publicar frontend novo (tratamento de `type=invite`/`type=recovery`, tela "Defina sua senha", chamada à nova RPC nos dois pontos, esconder "Criar conta").
+3. **Configuração futura necessária**: adicionar a URL de onboarding à allowlist de redirect do Supabase (`Authentication → URL Configuration`) — sem isso, o `redirectTo` do convite é ignorado.
+4. Testar convite administrativo real (Dashboard → "Add user → Send invitation"), ponta a ponta, com cadastro público ainda **ligado**.
+5. Etapa separada, com evidência do estado anterior e rollback próprio: desativar "Allow new users to sign up".
+6. Reconfirmar login de usuários existentes + recuperação de senha + convite administrativo, agora com o toggle desativado.
+7. `DROP` de limpeza das RPCs antigas.
+
+### Rollback
+
+- Passo 1: reverter é reconceder `EXECUTE` das RPCs antigas a `authenticated` (a tabela/RPC nova pode continuar existindo, inofensiva, sem uso).
+- Passo 5 (toggle de cadastro público): reverter é reativar o toggle — configuração, instantâneo, sem risco de perda de dado.
+
+### Matriz final de QA (a executar somente após implementação e autorização)
+
+| Cenário | Esperado |
+|---|---|
+| Chamada direta às 2 RPCs antigas, antes do `REVOKE` | ✅ Funcionam (baseline) |
+| Mesma chamada, depois do `REVOKE` | 🚫 `42501 permission denied` |
+| Cadastro público bloqueado (depois do passo 5) | 🚫 Erro em `signUp()` |
+| Convite novo aceito, ponta a ponta | ✅ |
+| Convite expirado / autorização expirada ou revogada | 🚫 `TRQ52` |
+| Usuário existente, sem vínculo, autorizado (link simples) | ✅ |
+| Definição de senha após convite | ✅ |
+| Login de contas existentes (antes/depois de tudo) | ✅ Inalterado |
+| Retry mesmo `p_empresa_id` | ✅ Idempotente |
+| Retry com `p_empresa_id` diferente / 2ª empresa com autorização já consumida | 🚫 `TRQ52` |
+| Duas chamadas simultâneas, UUIDs diferentes | Uma vence, a outra `TRQ52` |
+| Nenhuma empresa/vínculo parcial gravado após qualquer rejeição | ✅ (transação única, `ROLLBACK` automático) |
+
+### Arquivos candidatos (nenhum alterado ainda)
+
+- `index.html` — tela "Defina sua senha", formulário de dados da empresa pós-convite, remoção do link "Criar conta".
+- `script.js` — tratamento de `type=invite`/`type=recovery`, chamada à nova RPC nos dois pontos de entrada, affordance para usuário existente via `existe_autorizacao_onboarding_pendente()`.
+- Nenhuma migração SQL foi salva em arquivo ainda — `qa/fase-5/scripts/` **não foi criada** neste checkpoint, propositalmente.
+
+### Alinhamento com a Restrição fundamental já registrada nesta fase
+
+Este incremento não envolve, em nenhum momento, acesso a dados operacionais de empresas clientes — a autorização e as RPCs tratam exclusivamente de identidade (e-mail) e criação de registro administrativo (`empresas`/`usuarios_empresas`), nunca de clientes, veículos, OS, peças, fornecedores, funcionários, agenda ou caixa. Nenhuma função de personificação ou acesso emergencial é criada por este incremento — consistente com a "Restrição fundamental" já registrada acima neste mesmo documento.
 
 ## Pré-requisito antes de implementar esta fase
 
