@@ -18,16 +18,48 @@
       <div class="brand-mark">T</div>
       <div><div class="brand-name">Torque.Tec</div><div class="brand-sub">Gestão que move seu negócio</div></div>
     </div>
-    <h1 id="authTitle">Entrar</h1>
-    <p class="sub" id="authSub">Acesse o painel da sua oficina</p>
+    <h1>Entrar</h1>
+    <p class="sub">Acesse o painel da sua oficina</p>
     <div id="authError" class="auth-error hidden"></div>
     <div class="field"><label>E-mail</label><input type="email" id="authEmail" placeholder="voce@oficina.com"></div>
     <div class="field"><label>Senha</label><input type="password" id="authPassword" placeholder="Mínimo 6 caracteres"></div>
-    <div class="field hidden" id="authNomeField"><label>Nome da oficina</label><input type="text" id="authNomeOficina" placeholder="Ex: Oficina do João"></div>
-    <div class="field hidden" id="authCnpjField"><label>CNPJ (opcional)</label><input type="text" id="authCnpj" placeholder="00.000.000/0000-00"></div>
-    <div class="field hidden" id="authTelefoneField"><label>Telefone da oficina</label><input type="text" id="authTelefone" placeholder="11 91234-5678"></div>
     <button class="btn btn-primary btn-block" id="authSubmitBtn">Entrar</button>
-    <div class="auth-toggle" id="authToggle">Ainda não tem conta? <a id="authToggleLink">Criar conta</a></div>
+  </div>
+</div>
+
+<!-- Incremento 1 (Fase 5.1) - onboarding autorizado por convite: tela de
+     definição de senha, usada tanto no aceite de convite (type=invite)
+     quanto na futura "Esqueci minha senha" (type=recovery). -->
+<div id="definirSenhaScreen" class="auth-wrap hidden">
+  <div class="auth-card">
+    <div class="auth-brand">
+      <div class="brand-mark">T</div>
+      <div><div class="brand-name">Torque.Tec</div><div class="brand-sub">Gestão que move seu negócio</div></div>
+    </div>
+    <h1>Defina sua senha</h1>
+    <p class="sub">Escolha uma senha para acessar sua conta.</p>
+    <div id="definirSenhaError" class="auth-error hidden"></div>
+    <div class="field"><label>Nova senha</label><input type="password" id="definirSenhaNova" placeholder="Mínimo 6 caracteres"></div>
+    <div class="field"><label>Confirmar senha</label><input type="password" id="definirSenhaConfirmar" placeholder="Repita a nova senha"></div>
+    <button class="btn btn-primary btn-block" id="definirSenhaSubmitBtn">Salvar senha</button>
+  </div>
+</div>
+
+<!-- Incremento 1 (Fase 5.1) - cadastro da empresa após autorização da
+     plataforma (convite aceito ou usuário existente autorizado). -->
+<div id="empresaAutorizadaScreen" class="auth-wrap hidden">
+  <div class="auth-card">
+    <div class="auth-brand">
+      <div class="brand-mark">T</div>
+      <div><div class="brand-name">Torque.Tec</div><div class="brand-sub">Gestão que move seu negócio</div></div>
+    </div>
+    <h1>Cadastrar empresa</h1>
+    <p class="sub">Você foi autorizado a criar uma empresa no Torque.</p>
+    <div id="empresaAutorizadaError" class="auth-error hidden"></div>
+    <div class="field"><label>Nome da empresa</label><input type="text" id="empresaAutorizadaNome" placeholder="Ex: Oficina do João"></div>
+    <div class="field"><label>CNPJ (opcional)</label><input type="text" id="empresaAutorizadaCnpj" placeholder="00.000.000/0000-00"></div>
+    <div class="field"><label>Telefone (opcional)</label><input type="text" id="empresaAutorizadaTelefone" placeholder="11 91234-5678"></div>
+    <button class="btn btn-primary btn-block" id="empresaAutorizadaSubmitBtn">Criar empresa</button>
   </div>
 </div>
 

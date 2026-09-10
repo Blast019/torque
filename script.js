@@ -9,7 +9,6 @@ let vinculosAtivosAtual = [];
 let inicializandoApp = false;
 let data = { clientes: [], veiculos: [], pecas: [], fornecedores: [], os: [], osItens: [], movimentos: [], marcas: [], modelos: [], funcionarios: [] };
 let filtroFuncionarios = '';
-let modoCadastro = false;
 let filtroClientes = '';
 let filtroStatusCliente = '';
 let filtroPecas = '';
@@ -35,73 +34,226 @@ let vinculoIdParaReativar = null;
 let vinculoIdParaAlterarPapel = null;
 let vinculoIdParaSairEmpresa = null;
 let saindoDaEmpresa = false;
+let autorizacaoNovaEmpresaPendente = false;
+let tipoFluxoAuthAtual = null;
+let bootTratado = false;
+let definindoSenha = false;
+let empresaAutorizadaId = null;
+let empresaAutorizadaLimparPendente = false;
+let criandoEmpresaAutorizada = false;
 
 // ---------------- AUTH ----------------
-function alternarModoAuth(){
-  modoCadastro = !modoCadastro;
-  document.getElementById('authTitle').textContent = modoCadastro ? 'Criar conta' : 'Entrar';
-  document.getElementById('authSub').textContent = modoCadastro ? 'Cadastre sua oficina no Torque' : 'Acesse o painel da sua oficina';
-  document.getElementById('authNomeField').classList.toggle('hidden', !modoCadastro);
-  document.getElementById('authCnpjField').classList.toggle('hidden', !modoCadastro);
-  document.getElementById('authTelefoneField').classList.toggle('hidden', !modoCadastro);
-  document.getElementById('authSubmitBtn').textContent = modoCadastro ? 'Criar conta' : 'Entrar';
-  document.getElementById('authToggle').innerHTML = modoCadastro
-    ? 'Já tem conta? <a id="authToggleLink2">Entrar</a>'
-    : 'Ainda não tem conta? <a id="authToggleLink">Criar conta</a>';
-  // O innerHTML acima destrói o link anterior e cria um novo — reanexar a
-  // mesma função ao link recém-criado, em vez de tentar clicar num nó que
-  // já não existe mais (causa do TypeError anterior).
-  const novoLink = document.getElementById(modoCadastro ? 'authToggleLink2' : 'authToggleLink');
-  if(novoLink) novoLink.addEventListener('click', alternarModoAuth);
-}
-document.getElementById('authToggleLink').addEventListener('click', alternarModoAuth);
-
+// Cadastro público removido (Incremento 1 - Fase 5.1): toda empresa nova
+// passa a exigir autorização administrativa da plataforma. Login continua
+// igual para contas já existentes.
 document.getElementById('authSubmitBtn').addEventListener('click', async ()=>{
   const email = document.getElementById('authEmail').value.trim();
   const password = document.getElementById('authPassword').value;
-  const nomeOficina = document.getElementById('authNomeOficina').value.trim();
-  const cnpjOficina = document.getElementById('authCnpj').value.trim();
-  const telefoneOficina = document.getElementById('authTelefone').value.trim();
   const errEl = document.getElementById('authError');
   errEl.classList.add('hidden');
 
   if(!email || !password){ showAuthError('Preencha e-mail e senha.'); return; }
 
-  if(modoCadastro){
-    // A criação da empresa não acontece mais aqui: signUp só grava os dados
-    // como "pendentes" em user_metadata. A criação real (empresa + vínculo
-    // proprietario) é feita pela RPC criar_empresa_com_vinculo, chamada por
-    // iniciarApp() assim que existir uma sessão autenticada de verdade
-    // (logo abaixo, ou no primeiro login pós-confirmação de e-mail).
-    const { data: signData, error } = await sb.auth.signUp({
-      email,
-      password,
-      options: {
-        data: {
-          pending_empresa: true,
-          pending_empresa_nome: nomeOficina || 'Minha oficina',
-          pending_empresa_cnpj: cnpjOficina || null,
-          pending_empresa_telefone: telefoneOficina || null
-        }
-      }
-    });
-    if(error){ showAuthError(error.message); return; }
-    if(!signData.session){
-      showAuthError('Conta criada! Verifique seu e-mail para confirmar antes de entrar.');
-      return;
-    }
-    await iniciarApp();
-  } else {
-    const { error } = await sb.auth.signInWithPassword({ email, password });
-    if(error){ showAuthError(error.message); return; }
-    await iniciarApp();
-  }
+  const { error } = await sb.auth.signInWithPassword({ email, password });
+  if(error){ showAuthError(error.message); return; }
+  await iniciarApp();
 });
 
 function showAuthError(msg){
   const el = document.getElementById('authError');
   el.textContent = msg;
   el.classList.remove('hidden');
+}
+
+// ---------------- ONBOARDING AUTORIZADO POR CONVITE (Incremento 1) ----------------
+// Nenhum ponto deste bloco registra access_token, refresh_token ou o
+// objeto de sessão no console, em nenhuma circunstância.
+
+// O Supabase devolve o tipo do fluxo (invite/recovery/signup) tanto no
+// fragmento da URL (#access_token=...&type=invite) quanto, em fluxos mais
+// novos (PKCE), na query string (?type=recovery) — verifica os dois, sem
+// nunca logar o restante dos parâmetros.
+function extrairTipoAuthDaUrl(){
+  const hash = new URLSearchParams(location.hash ? location.hash.substring(1) : '');
+  const query = new URLSearchParams(location.search);
+  return hash.get('type') || query.get('type') || null;
+}
+
+// Remove fragmento e query string da URL depois que a sessão já foi
+// estabelecida — access_token/refresh_token nunca ficam visíveis na barra
+// de endereço nem no histórico do navegador.
+function limparParametrosSensiveisDaUrl(){
+  const url = new URL(location.href);
+  url.hash = '';
+  url.search = '';
+  history.replaceState({}, document.title, url.toString());
+}
+
+function abrirTelaDefinirSenha(tipo){
+  tipoFluxoAuthAtual = tipo;
+  document.getElementById('definirSenhaNova').value = '';
+  document.getElementById('definirSenhaConfirmar').value = '';
+  document.getElementById('definirSenhaError').classList.add('hidden');
+  document.getElementById('definirSenhaSubmitBtn').disabled = false;
+  mostrarTela('definirSenhaScreen');
+}
+
+function mostrarErroDefinirSenha(msg){
+  const el = document.getElementById('definirSenhaError');
+  el.textContent = msg;
+  el.classList.remove('hidden');
+}
+
+document.getElementById('definirSenhaSubmitBtn').addEventListener('click', async ()=>{
+  if(definindoSenha) return;
+
+  const senha = document.getElementById('definirSenhaNova').value;
+  const confirmar = document.getElementById('definirSenhaConfirmar').value;
+  document.getElementById('definirSenhaError').classList.add('hidden');
+
+  if(!senha || !confirmar){ mostrarErroDefinirSenha('Preencha os dois campos de senha.'); return; }
+  if(senha.length < 6){ mostrarErroDefinirSenha('A senha precisa ter no mínimo 6 caracteres.'); return; }
+  if(senha !== confirmar){ mostrarErroDefinirSenha('As senhas não coincidem.'); return; }
+
+  const submitBtn = document.getElementById('definirSenhaSubmitBtn');
+  definindoSenha = true;
+  submitBtn.disabled = true;
+
+  try{
+    const { error } = await sb.auth.updateUser({ password: senha });
+    if(error){
+      mostrarErroDefinirSenha('Não foi possível salvar a senha agora. Tente novamente.');
+      return;
+    }
+
+    if(tipoFluxoAuthAtual === 'invite'){
+      const { data: userData } = await sb.auth.getUser();
+      usuarioIdAtual = (userData && userData.user) ? userData.user.id : null;
+      abrirTelaEmpresaAutorizada();
+    } else {
+      await iniciarApp();
+    }
+  } catch(erroInesperado){
+    mostrarErroDefinirSenha('Não foi possível salvar a senha agora. Tente novamente.');
+  } finally {
+    definindoSenha = false;
+    submitBtn.disabled = false;
+  }
+});
+
+// metadataPendente (opcional): dados de um cadastro antigo
+// (user_metadata.pending_empresa_nome/cnpj/telefone), só para
+// pré-preencher o formulário — nunca autoriza nada sozinho, quem autoriza
+// é sempre existe_autorizacao_onboarding_pendente(), já checado por quem
+// chama esta função.
+function abrirTelaEmpresaAutorizada(metadataPendente){
+  document.getElementById('empresaAutorizadaNome').value = (metadataPendente && metadataPendente.pending_empresa_nome) || '';
+  document.getElementById('empresaAutorizadaCnpj').value = (metadataPendente && metadataPendente.pending_empresa_cnpj) || '';
+  document.getElementById('empresaAutorizadaTelefone').value = (metadataPendente && metadataPendente.pending_empresa_telefone) || '';
+  document.getElementById('empresaAutorizadaError').classList.add('hidden');
+  document.getElementById('empresaAutorizadaSubmitBtn').disabled = false;
+  // Limpeza do metadata antigo só acontece depois de sucesso confirmado —
+  // guardado aqui para o handler de submit saber se há algo pra limpar.
+  empresaAutorizadaLimparPendente = !!metadataPendente;
+  // Gerado uma única vez ao abrir a tela — reaproveitado em retries do
+  // mesmo envio (erro/timeout), nunca entre duas empresas diferentes.
+  empresaAutorizadaId = crypto.randomUUID();
+  mostrarTela('empresaAutorizadaScreen');
+}
+
+function mostrarErroEmpresaAutorizada(erro){
+  const el = document.getElementById('empresaAutorizadaError');
+  const codigo = erro && erro.code;
+  const mensagens = {
+    TRQ56: 'Sua sessão não é válida. Atualize a página e tente novamente.',
+    TRQ57: 'Informe o nome da empresa.',
+    TRQ58: 'Não há autorização válida para criar esta empresa. Fale com o administrador da plataforma.',
+    TRQ59: 'Não foi possível criar a empresa agora. Tente novamente.',
+    TRQ60: 'Não foi possível criar a empresa com os dados informados.'
+  };
+  el.textContent = mensagens[codigo] || 'Não foi possível criar a empresa agora. Tente novamente.';
+  el.classList.remove('hidden');
+}
+
+document.getElementById('empresaAutorizadaSubmitBtn').addEventListener('click', async ()=>{
+  if(criandoEmpresaAutorizada) return;
+
+  const nome = document.getElementById('empresaAutorizadaNome').value.trim();
+  const cnpj = document.getElementById('empresaAutorizadaCnpj').value.trim();
+  const telefone = document.getElementById('empresaAutorizadaTelefone').value.trim();
+  document.getElementById('empresaAutorizadaError').classList.add('hidden');
+
+  if(!nome){ mostrarErroEmpresaAutorizada({ code: 'TRQ57' }); return; }
+
+  const submitBtn = document.getElementById('empresaAutorizadaSubmitBtn');
+  const empresaIdSolicitada = empresaAutorizadaId;
+  criandoEmpresaAutorizada = true;
+  submitBtn.disabled = true;
+
+  try{
+    const { data: resultadoRpc, error } = await sb.rpc('criar_empresa_autorizada', {
+      p_empresa_id: empresaIdSolicitada,
+      p_nome_empresa: nome,
+      p_cnpj_empresa: cnpj || null,
+      p_telefone_empresa: telefone || null
+    });
+
+    if(error){
+      mostrarErroEmpresaAutorizada(error);
+      return;
+    }
+
+    const resultado = Array.isArray(resultadoRpc) ? resultadoRpc[0] : resultadoRpc;
+    if(!resultado || !resultado.empresa_id){
+      mostrarErroEmpresaAutorizada({ code: null });
+      return;
+    }
+
+    // Limpeza best-effort do metadata pendente antigo — só depois do
+    // sucesso confirmado acima, nunca antes. Uma falha aqui NÃO desfaz a
+    // criação (empresa e vínculo já existem) e não provoca uma segunda
+    // empresa num retry futuro: o retry usaria o mesmo empresaAutorizadaId
+    // (idempotente na RPC) e, de qualquer forma, a partir daqui o usuário
+    // já tem >=1 vínculo ativo, então este ramo nunca mais é alcançado.
+    if(empresaAutorizadaLimparPendente){
+      try{
+        await sb.auth.updateUser({
+          data: {
+            pending_empresa: false,
+            pending_empresa_nome: null,
+            pending_empresa_cnpj: null,
+            pending_empresa_telefone: null
+          }
+        });
+      } catch(erroLimpeza){
+        // best-effort — sem ação adicional.
+      }
+    }
+
+    persistirEscolhaERecarregar(usuarioIdAtual, resultado.empresa_id);
+  } catch(erroInesperado){
+    mostrarErroEmpresaAutorizada({ code: null });
+  } finally {
+    criandoEmpresaAutorizada = false;
+    submitBtn.disabled = false;
+  }
+});
+
+// Ponto único de decisão do boot — roda uma vez por sessão detectada via
+// onAuthStateChange (evento INITIAL_SESSION), guardado por bootTratado
+// para nunca inicializar duas vezes.
+async function tratarBootComSessao(session){
+  const tipo = extrairTipoAuthDaUrl();
+  if(session && (tipo === 'invite' || tipo === 'recovery')){
+    limparParametrosSensiveisDaUrl();
+    abrirTelaDefinirSenha(tipo);
+    return;
+  }
+  if(session){
+    await iniciarApp();
+  } else {
+    mostrarTela('authScreen');
+  }
 }
 
 async function sairDaConta(){
@@ -122,14 +274,9 @@ document.getElementById('trocarEmpresaBtn').addEventListener('click', ()=>{
   });
 });
 
-async function checkSessaoExistente(){
-  const { data: { session } } = await sb.auth.getSession();
-  if(session) await iniciarApp();
-}
-
 // ---------------- CONTEXTO DA EMPRESA (Fase 3) ----------------
 
-const TELAS_PRINCIPAIS = ['authScreen', 'estadoContextoScreen', 'seletorEmpresaScreen', 'appScreen'];
+const TELAS_PRINCIPAIS = ['authScreen', 'estadoContextoScreen', 'seletorEmpresaScreen', 'definirSenhaScreen', 'empresaAutorizadaScreen', 'appScreen'];
 function mostrarTela(id){
   TELAS_PRINCIPAIS.forEach(t => document.getElementById(t).classList.toggle('hidden', t !== id));
 }
@@ -281,7 +428,19 @@ async function entrarNaEmpresa(vinculo){
   document.getElementById('oficinaStatusLabel').replaceChildren(statusSpan);
 
   document.getElementById('trocarEmpresaBtn').classList.toggle('hidden', vinculosAtivosAtual.length <= 1);
-  document.getElementById('novaEmpresaConfigBtn').classList.toggle('hidden', contextoEmpresa.papel !== 'proprietario');
+
+  // Incremento 1 (Fase 5.1): "+ Nova empresa" deixa de depender do papel
+  // (proprietario) e passa a depender de autorização administrativa da
+  // plataforma — qualquer papel pode receber autorização para criar uma
+  // empresa adicional (preserva multiempresa). Checagem defensiva de
+  // frontend só; a segurança real é sempre da RPC.
+  try{
+    const { data: autorizadoRpc } = await sb.rpc('existe_autorizacao_onboarding_pendente');
+    autorizacaoNovaEmpresaPendente = autorizadoRpc === true;
+  } catch(erroAutorizacao){
+    autorizacaoNovaEmpresaPendente = false;
+  }
+  document.getElementById('novaEmpresaConfigBtn').classList.toggle('hidden', !autorizacaoNovaEmpresaPendente);
   renderMinhasEmpresas();
 
   mostrarTela('appScreen');
@@ -298,107 +457,6 @@ async function entrarNaEmpresa(vinculo){
       acoes: [{ label: 'Tentar novamente', primary: true, onClick: ()=>location.reload() }]
     });
   }
-}
-
-function mostrarErroRpcCadastro(erro){
-  const codigo = erro && erro.code;
-  if(codigo === 'TRQ01'){
-    mostrarEstadoContexto({
-      titulo: 'Sessão inválida',
-      mensagem: 'Sua sessão não é válida para concluir o cadastro. Entre novamente.',
-      acoes: [{ label: 'Sair', primary: true, onClick: sairDaConta }]
-    });
-    return;
-  }
-  if(codigo === 'TRQ02'){
-    mostrarEstadoContexto({
-      titulo: 'Conta inconsistente',
-      mensagem: 'Há uma inconsistência na sua conta. Entre em contato com o suporte.',
-      acoes: [{ label: 'Sair', onClick: sairDaConta }]
-    });
-    return;
-  }
-  if(codigo === 'TRQ03'){
-    mostrarEstadoContexto({
-      titulo: 'Criação não permitida',
-      mensagem: 'Sua conta já tem acesso a uma empresa. Atualize a página para continuar.',
-      acoes: [{ label: 'Atualizar', primary: true, onClick: ()=>location.reload() }]
-    });
-    return;
-  }
-  if(codigo === 'TRQ04'){
-    mostrarEstadoContexto({
-      titulo: 'Dados inválidos',
-      mensagem: 'Os dados informados no cadastro são inválidos. Entre em contato com o suporte.',
-      acoes: [{ label: 'Sair', onClick: sairDaConta }]
-    });
-    return;
-  }
-  mostrarEstadoContexto({
-    titulo: 'Erro técnico',
-    mensagem: 'Não foi possível concluir o cadastro da empresa. Tente novamente.',
-    acoes: [
-      { label: 'Tentar novamente', primary: true, onClick: ()=>iniciarApp() },
-      { label: 'Sair', onClick: sairDaConta }
-    ]
-  });
-}
-
-// 0 vínculos + pending_empresa === true: só chega aqui depois que
-// buscarVinculosAtivos() já confirmou 0 vínculos nesta mesma consulta do
-// boot atual. Os valores de user_metadata são só carga útil da RPC — quem
-// autoriza (ou não) a criação é a própria função, no banco.
-async function finalizarCadastroPendente(user){
-  mostrarEstadoContexto({
-    titulo: 'Finalizando cadastro',
-    mensagem: 'Estamos concluindo o cadastro da sua empresa…',
-    acoes: []
-  });
-
-  const metadata = user.user_metadata || {};
-  const { data: resultadoRpc, error } = await sb.rpc('criar_empresa_com_vinculo', {
-    p_nome_empresa: metadata.pending_empresa_nome || null,
-    p_cnpj_empresa: metadata.pending_empresa_cnpj || null,
-    p_telefone_empresa: metadata.pending_empresa_telefone || null
-  });
-
-  if(error){
-    mostrarErroRpcCadastro(error);
-    return;
-  }
-
-  const resultado = Array.isArray(resultadoRpc) ? resultadoRpc[0] : resultadoRpc;
-  if(!resultado || !resultado.empresa_id){
-    mostrarEstadoContexto({
-      titulo: 'Erro técnico',
-      mensagem: 'A criação da empresa não retornou os dados esperados. Tente novamente.',
-      acoes: [
-        { label: 'Tentar novamente', primary: true, onClick: ()=>iniciarApp() },
-        { label: 'Sair', onClick: sairDaConta }
-      ]
-    });
-    return;
-  }
-
-  // Limpeza best-effort do metadata pendente. Se falhar, NÃO desfaz o
-  // cadastro (empresa e vínculo já foram criados pela RPC) e não provoca
-  // uma nova empresa em retries futuros: a partir daqui o usuário sempre
-  // terá >=1 vínculo ativo, então iniciarApp() nunca mais entra neste ramo
-  // de "0 vínculos + pending_empresa", independentemente do metadata.
-  try{
-    await sb.auth.updateUser({
-      data: {
-        pending_empresa: false,
-        pending_empresa_nome: null,
-        pending_empresa_cnpj: null,
-        pending_empresa_telefone: null
-      }
-    });
-  } catch(erroLimpeza){
-    // best-effort — sem ação adicional.
-  }
-
-  persistirEscolhaERecarregar(user.id, resultado.empresa_id);
 }
 
 async function iniciarApp(){
@@ -451,10 +509,31 @@ async function iniciarApp(){
     usuarioIdAtual = user.id;
 
     if(vinculos.length === 0){
-      const pendente = !!(user.user_metadata && user.user_metadata.pending_empresa === true);
-      if(pendente){
-        await finalizarCadastroPendente(user);
+      // Incremento 1 (Fase 5.1): criar_empresa_com_vinculo foi revogada —
+      // "pending_empresa" (metadata de um cadastro antigo, de antes deste
+      // incremento) deixou de ser, sozinho, permissão para criar empresa.
+      // A única via de criação, em qualquer caso, é
+      // existe_autorizacao_onboarding_pendente() + criar_empresa_autorizada.
+      // Os valores antigos de user_metadata (se existirem) só servem para
+      // pré-preencher o formulário — nunca para autorizar nada sozinhos.
+      const metadata = user.user_metadata || {};
+      const pendente = metadata.pending_empresa === true;
+
+      let autorizado = false;
+      try{
+        const { data: autorizadoRpc } = await sb.rpc('existe_autorizacao_onboarding_pendente');
+        autorizado = autorizadoRpc === true;
+      } catch(erroAutorizacao){
+        autorizado = false;
+      }
+
+      if(autorizado){
+        abrirTelaEmpresaAutorizada(pendente ? metadata : null);
       } else {
+        // Sem autorização válida: nenhuma empresa é criada, mesmo que
+        // exista metadata pendente antiga — comportamento exigido
+        // explicitamente (autorização é sempre a condição, nunca a
+        // metadata sozinha).
         mostrarEstadoContexto({
           titulo: 'Sem vínculo',
           mensagem: 'Sua conta não está associada a nenhuma empresa no momento.',
@@ -2715,10 +2794,11 @@ document.getElementById('removerUsuarioConfirmarBtn').addEventListener('click', 
 });
 
 function abrirModalNovaEmpresa(){
-  // Guarda defensiva de frontend: a segurança real fica na RPC (TRQ15),
-  // isto só evita abrir o modal por uma chamada acidental quando o botão
-  // que o dispara já deveria estar oculto para o papel atual.
-  if(!contextoEmpresa || contextoEmpresa.papel !== 'proprietario') return;
+  // Guarda defensiva de frontend: a segurança real fica na RPC
+  // (autorizacoes_onboarding + TRQ58), isto só evita abrir o modal por uma
+  // chamada acidental quando o botão que o dispara já deveria estar
+  // oculto (Incremento 1 - Fase 5.1, não depende mais do papel).
+  if(!contextoEmpresa || !autorizacaoNovaEmpresaPendente) return;
   document.getElementById('novaEmpresaNome').value = '';
   document.getElementById('novaEmpresaCnpj').value = '';
   document.getElementById('novaEmpresaTelefone').value = '';
@@ -2737,10 +2817,11 @@ function mostrarErroNovaEmpresa(erro){
   const el = document.getElementById('novaEmpresaError');
   const codigo = erro && erro.code;
   const mensagens = {
-    TRQ11: 'Sua sessão não é válida. Atualize a página e tente novamente.',
-    TRQ14: 'Informe o nome da empresa.',
-    TRQ15: 'Somente o proprietário pode criar uma nova empresa.',
-    TRQ16: 'Não foi possível criar a empresa agora. Tente novamente.'
+    TRQ56: 'Sua sessão não é válida. Atualize a página e tente novamente.',
+    TRQ57: 'Informe o nome da empresa.',
+    TRQ58: 'Não há autorização válida para criar esta empresa. Fale com o administrador da plataforma.',
+    TRQ59: 'Não foi possível criar a empresa agora. Tente novamente.',
+    TRQ60: 'Não foi possível criar a empresa com os dados informados.'
   };
   el.textContent = mensagens[codigo] || 'Não foi possível criar a empresa agora. Tente novamente.';
   el.classList.remove('hidden');
@@ -2768,12 +2849,11 @@ document.getElementById('novaEmpresaSubmitBtn').addEventListener('click', async 
   cancelBtn.disabled = true;
 
   try{
-    const { data: resultadoRpc, error } = await sb.rpc('criar_nova_empresa_com_vinculo', {
+    const { data: resultadoRpc, error } = await sb.rpc('criar_empresa_autorizada', {
       p_empresa_id: empresaIdSolicitada,
       p_nome_empresa: nome,
       p_cnpj_empresa: cnpj || null,
-      p_telefone_empresa: telefone || null,
-      p_empresa_origem_id: empresaId
+      p_telefone_empresa: telefone || null
     });
 
     if(error){
@@ -2799,4 +2879,21 @@ document.getElementById('novaEmpresaSubmitBtn').addEventListener('click', async 
   }
 });
 
-checkSessaoExistente();
+// Ponto único de boot: registra o listener nativo do Supabase, que dispara
+// INITIAL_SESSION uma vez ao ser registrado (equivalente a getSession(),
+// mas corretamente ordenado com o processamento de type=invite/recovery
+// vindo da URL) e PASSWORD_RECOVERY quando aplicável. Nunca loga session,
+// access_token ou refresh_token.
+sb.auth.onAuthStateChange((event, session)=>{
+  if(event === 'PASSWORD_RECOVERY'){
+    bootTratado = true;
+    limparParametrosSensiveisDaUrl();
+    abrirTelaDefinirSenha('recovery');
+    return;
+  }
+  if(bootTratado) return;
+  if(event === 'INITIAL_SESSION'){
+    bootTratado = true;
+    tratarBootComSessao(session);
+  }
+});

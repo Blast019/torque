@@ -4,9 +4,59 @@
 
 ## Checkpoint de 10/09/2026 — Incremento 1: onboarding autorizado por convite (Alternativa A)
 
-🔵 **SOMENTE PLANEJADO. Nenhuma implementação foi realizada** — nenhum arquivo, código, banco de dados, configuração de Auth ou remoto foi alterado até este checkpoint. Esta seção consolida, por escrito, a Proposta Técnica v4 do Incremento 1 discutida em sessões anteriores (que até agora só existia em histórico de conversa) e o resultado da auditoria de pré-implementação feita em 10/09/2026.
+🔵 **PLANEJADO E COM FRONTEND IMPLEMENTADO LOCALMENTE. Migração ainda NÃO executada, nenhum convite enviado, nenhuma configuração do Supabase alterada, nenhum commit/push feito.** Esta seção consolida, por escrito, a Proposta Técnica v4 do Incremento 1, a auditoria de pré-implementação, o SQL de migração e rollback já criados/revisados, e a implementação local do frontend (ver atualização abaixo).
 
-### Estado do Git auditado nesta data
+### Validação 1 de 3 — frontend local (10/09/2026) — ✅ APROVADA
+
+Executada com `npx serve -l 53170 .` (mesmo procedimento do projeto) + Playwright (Chrome do sistema) para desktop (1440×900) e mobile (390×844). Nenhum SQL executado, nenhum convite enviado, nenhuma empresa criada, nenhuma senha salva — só login normal de uma conta QA já existente (`QA_EMAIL_PROPRIETARIO`).
+
+**Cenário A — tela pública**: ✅ só "Entrar" aparece, "Criar conta" ausente (0 ocorrências, `#authToggle` inexistente no DOM), campos de e-mail/senha e botão alinhados, em desktop e mobile. Confirmado por screenshot.
+
+**Cenário B — login existente**: ✅ login de `PROP_A` bem-sucedido; empresa carregada ("QA Fase 2.5 - Empresa A"); sidebar, navegação entre abas (Painel ↔ Clientes) e logout funcionando, em desktop e mobile. Sequência de rede do boot confirmada como única (sem duplicação): `auth/v1/token` → `auth/v1/user` → `usuarios_empresas` → `rpc/existe_autorizacao_onboarding_pendente` → (logout) `auth/v1/logout`. **`existe_autorizacao_onboarding_pendente` ainda não existe no banco atual** (migração não executada) — a chamada falha, é capturada pelo `try/catch`, e `#novaEmpresaConfigBtn` permanece oculto (`novaEmpresaConfigBtnHidden: true`), exatamente como esperado; o restante do fluxo (carregamento da empresa, navegação, logout) não foi afetado.
+
+**Cenário C — novas telas, só inspeção visual**: ✅ `#definirSenhaScreen` e `#empresaAutorizadaScreen` exibidas via remoção manual da classe `hidden` no Console (sem clicar em nenhum botão de submit) — campos, botões e responsividade corretos em desktop e mobile, sem elementos sobrepostos. Confirmado por screenshot nas 4 combinações (2 telas × 2 viewports).
+
+**Console**: nenhum erro relacionado a este incremento. Único registro: `Failed to load resource: 404`, idêntico em todas as passagens (inclusive na tela pública, antes de qualquer login/RPC) — consistente com o `favicon.ico` ausente, já documentado como ocorrência pré-existente e fora de escopo em auditoria anterior desta mesma sessão.
+
+**Network**: ✅ zero chamadas a `criar_empresa_com_vinculo`/`criar_nova_empresa_com_vinculo` em toda a validação; ✅ zero chamadas a `criar_empresa_autorizada` durante o Cenário C (nenhuma ação disparada); ✅ nenhuma chamada duplicada de inicialização (sequência de boot única, confirmada acima).
+
+**Resultado: APROVADA — nenhum erro funcional ou visual encontrado. Nenhuma correção necessária nesta etapa.**
+
+### Atualização do checkpoint — rollback e frontend local (10/09/2026)
+
+**O que foi feito nesta rodada:**
+
+- **Correção documental**: a afirmação de que `criar_empresa_autorizada` seria o "único caminho de escrita legítimo" nas duas tabelas foi corrigida (ver seção "Endurecimentos" abaixo) — ela é o único caminho para **criar empresa nova**; as RPCs de gerenciamento de vínculos da Fase 4 (`incluir_usuario_empresa`, `alterar_papel_usuario_empresa`, `remover_usuario_empresa`) continuam sendo os caminhos legítimos para vínculos em empresas já existentes, sem nenhuma alteração.
+- **`qa/fase-5/scripts/onboarding-02-rollback-emergencial.sql`** (novo) — reverte só o `EXECUTE` das RPCs de criação de empresa (restaura as duas antigas, revoga a nova e a auxiliar), sem apagar tabela/autorização/dado, sem restaurar `INSERT` direto. **Não executado.**
+- **Frontend implementado localmente** (`index.html`, `script.js`) — cadastro público removido; detecção de `type=invite`/`type=recovery` via `onAuthStateChange` (`INITIAL_SESSION`/`PASSWORD_RECOVERY`), sem logar sessão/tokens, com limpeza da URL após estabelecer a sessão; tela "Defina sua senha" (`sb.auth.updateUser`); tela de cadastro da empresa autorizada (`criar_empresa_autorizada`, com `p_empresa_id` gerado uma única vez e reaproveitado em retry, proteção contra duplo clique, mensagens para `TRQ56`-`TRQ60`); fluxo "Sem vínculo" agora consulta `existe_autorizacao_onboarding_pendente()` antes do estado definitivo; botão "+ Nova empresa" (usuário já com vínculo) passa a depender dessa mesma autorização em vez do papel `proprietario`, chamando `criar_empresa_autorizada` sem `p_empresa_origem_id`.
+
+**Testes locais realizados:**
+- `node --check script.js` — sintaxe válida.
+- Busca textual confirmando que `criar_empresa_com_vinculo`/`criar_nova_empresa_com_vinculo` não são mais chamadas no fluxo novo (a única ocorrência restante de `criar_empresa_com_vinculo` é o `finalizarCadastroPendente()` legado, inalterado, hoje inatingível para contas novas por não existir mais cadastro público — mantido só para não quebrar uma eventual conta pré-existente com `pending_empresa=true`).
+- Busca textual confirmando as novas chamadas (`criar_empresa_autorizada` ×2, `existe_autorizacao_onboarding_pendente` ×2, `updateUser({ password })` ×1) e a ausência total de `authToggleLink`/`modoCadastro`/`alternarModoAuth`/campos de cadastro antigos em `index.html` e `script.js`.
+- `git diff --check` — sem erros de whitespace.
+- **Não foi feito**: nenhum teste real no navegador (`npx serve` + clique manual), nenhuma execução de SQL, nenhum convite real enviado.
+
+**Correção (10/09/2026) — pendência da chamada legada eliminada:** `finalizarCadastroPendente()` e `mostrarErroRpcCadastro()` foram **removidas** (ficaram sem uso, código morto apontando para RPC revogada). O ramo `vinculos.length === 0` de `iniciarApp()` foi unificado: `pending_empresa` (metadata de um cadastro antigo, anterior a este incremento) deixou de autorizar sozinho a criação de empresa — agora, em qualquer caso (com ou sem metadata pendente), a única via é `existe_autorizacao_onboarding_pendente()` + `criar_empresa_autorizada`. Quando há metadata antiga, ela só é usada para **pré-preencher** o formulário (`abrirTelaEmpresaAutorizada(metadata)`); se não houver autorização válida, nenhuma empresa é criada, mesmo com metadata pendente presente. A limpeza best-effort da metadata (`pending_empresa=false` etc.) passou a rodar só **depois** do sucesso confirmado de `criar_empresa_autorizada`, nunca antes — uma falha nessa limpeza não desfaz a criação nem causa duplicidade num retry (idempotência preservada pelo mesmo `p_empresa_id`, já garantida pela RPC).
+
+- **Nova busca confirmada**: zero ocorrências de `sb.rpc('criar_empresa_com_vinculo'` ou `sb.rpc('criar_nova_empresa_com_vinculo'` em `index.html`/`script.js` — a única menção textual restante é um comentário explicativo (não uma chamada).
+
+**Pendências:**
+- Executar a migração (`onboarding-01-migracao-autorizacao.sql`) em ambiente controlado.
+- Configurar a URL de redirecionamento do convite na allowlist do Supabase.
+- Testar o convite administrativo real, ponta a ponta (Dashboard → "Add user → Send invitation").
+- Teste manual no navegador do fluxo completo (login existente, convite/senha/empresa, "+ Nova empresa" com autorização).
+- Só depois disso, avaliar a etapa separada de desativar "Allow new users to sign up" (com evidência e rollback próprios, conforme já registrado).
+
+**Estado do Git nesta atualização:**
+```
+branch: main, HEAD = origin/main = 89380e95bf0bc3302664e2bff0a9adb844952210 (antes desta rodada)
+Modificados (working tree, nada staged): CNAME (pré-existente), index.html, script.js, qa/fase-5/STATUS.md
+Novo (não rastreado): qa/fase-5/scripts/ (migração 01 + rollback 02)
+Nenhum git add, commit ou push executado.
+```
+
+### Estado do Git auditado em 10/09/2026 (auditoria de pré-implementação original)
 
 ```
 branch: main
@@ -63,8 +113,8 @@ Pontos de design consolidados:
 ### RPCs propostas (não executadas)
 
 **`criar_empresa_autorizada(p_empresa_id uuid, p_nome_empresa text, p_cnpj_empresa text, p_telefone_empresa text)`** — substitui as duas RPCs existentes (`criar_empresa_com_vinculo` e `criar_nova_empresa_com_vinculo`), eliminando o conceito de "empresa de origem" (a autorização por e-mail passa a ser o único portão, independente de vínculos existentes em outras empresas — preserva multiempresa). Lógica central:
-1. Autenticação (`TRQ50` se `auth.uid()` nulo).
-2. Validação de entrada (`TRQ51`).
+1. Autenticação (`TRQ56` se `auth.uid()` nulo).
+2. Validação de entrada (`TRQ57`).
 3. Consumo atômico e idempotente da autorização, por e-mail da sessão **e** `p_empresa_id`:
    ```sql
    update public.autorizacoes_onboarding
@@ -76,19 +126,29 @@ Pontos de design consolidados:
       and ( (consumido_em is null and expira_em > now())
             or (consumido_por = v_usuario_id and consumido_para_empresa_id = p_empresa_id) )
    returning id into v_autorizacao_id;
-   -- v_autorizacao_id null => TRQ52 (sem_autorizacao)
+   -- v_autorizacao_id null => TRQ58 (sem_autorizacao)
    ```
 4. Lock consultivo por usuário (mesmo padrão das demais RPCs do projeto).
 5. Replay idempotente por `p_empresa_id` (mesmo dono + vínculo proprietário ativo correspondente) ou criação real (`INSERT` em `empresas` + `usuarios_empresas`).
-6. `unique_violation` tratado por constraint específica via `GET STACKED DIAGNOSTICS` — só classifica como `TRQ53` (id reutilizado) quando a constraint é `empresas_pkey`; qualquer outra violação de unicidade cai em `TRQ54` (mensagem genérica, sem expor nome de constraint ao chamador).
+6. `unique_violation` tratado por constraint específica via `GET STACKED DIAGNOSTICS` — o nome real da PK de `public.empresas` é descoberto dinamicamente pelo catálogo (`pg_catalog.pg_constraint`, `contype = 'p'`), nunca supondo o nome `empresas_pkey`; só classifica como `TRQ59` (id reutilizado) quando o nome descoberto coincide com o da constraint que disparou o erro. Se a PK não puder ser confirmada com exatidão, ou se for qualquer outra constraint de unicidade, cai em `TRQ60` (mensagem genérica, sem expor nome de constraint ao chamador) — falha sempre segura, nunca classifica como colisão de UUID sem confirmação.
 
 `SET search_path = ''`, `SECURITY DEFINER`, owner `postgres`, `REVOKE ALL FROM PUBLIC, anon`, `GRANT EXECUTE` só para `authenticated`/`service_role`.
 
 **`existe_autorizacao_onboarding_pendente()`** — RPC de leitura auxiliar, retorna só um `boolean` (sem dado sensível), para o frontend saber se deve oferecer "criar empresa autorizada" a um usuário já existente (que não passa pelo fluxo de convite, e por isso não tem outro jeito de descobrir isso, já que a tabela não é legível por `authenticated`).
 
-**Códigos de erro reservados**: `TRQ50` nao_autenticado, `TRQ51` entrada_invalida, `TRQ52` sem_autorizacao, `TRQ53` operacao_nao_permitida (colisão de id), `TRQ54` conflito_dados (qualquer outra violação de unicidade). Confirmados livres por leitura de todos os `STATUS.md` do projeto.
+**Códigos de erro — mapeamento final**: `TRQ56` nao_autenticado, `TRQ57` entrada_invalida, `TRQ58` sem_autorizacao, `TRQ59` operacao_nao_permitida (colisão de id), `TRQ60` conflito_dados (qualquer outra violação de unicidade).
 
-**Idempotência — regra final**: só é aceito como replay quando autorização, usuário **e** `p_empresa_id` coincidem todos com a primeira consumação bem-sucedida. Qualquer chamada do mesmo usuário com um `p_empresa_id` diferente, depois da autorização já consumida, é recusada (`TRQ52`).
+**Por que TRQ56-TRQ60 e não TRQ50-TRQ54 (numeração original da Proposta v4)**: confirmado por leitura de **todos** os `.sql` do projeto que `TRQ51` já era usado como `nao_autenticado` e `TRQ54` já era usado como `entrada_invalida`, ambos por `public.listar_usuarios_empresa` (`qa/fase-4/scripts/permissoes-09-listar-usuarios-empresa.sql`, Fase 4.3) — com significados diferentes dos que a v4 pretendia. Para não colidir nem alterar o significado de um código já publicado, a numeração foi deslocada para o próximo bloco livre e sequencial (`TRQ56`-`TRQ60`), confirmado sem uso em nenhum outro script do projeto.
+
+**Idempotência — regra final**: só é aceito como replay quando autorização, usuário **e** `p_empresa_id` coincidem todos com a primeira consumação bem-sucedida. Qualquer chamada do mesmo usuário com um `p_empresa_id` diferente, depois da autorização já consumida, é recusada (`TRQ58`).
+
+### Endurecimentos adicionados após a auditoria estática do SQL (10/09/2026)
+
+- **Normalização de e-mail com `lower(btrim(email))` nas duas RPCs** (`criar_empresa_autorizada` e `existe_autorizacao_onboarding_pendente`) — a versão inicial usava só `lower(email)` ao ler `auth.users.email`, inconsistente com o `CHECK` da tabela e o procedimento manual (ambos já usavam `lower(btrim(...))`). Corrigido para eliminar o risco, raro mas real, de um e-mail com espaço incidental nunca bater com a autorização gravada.
+- **`REVOKE INSERT ON TABLE public.empresas` e `public.usuarios_empresas` de `anon, authenticated`**, incluído na mesma migração — fecha qualquer via de escrita **direta** (sem passar por nenhuma RPC) nessas duas tabelas que `anon`/`authenticated` pudessem ter recebido em alguma migração anterior. Só `INSERT` direto é revogado: `SELECT`, `UPDATE`, `DELETE` e os grants de `postgres`/`service_role` permanecem exatamente como estavam. Quatro consultas finais com `has_table_privilege` confirmam o resultado esperado (`false` para `INSERT` de `anon`/`authenticated` nas duas tabelas).
+  - **Correção de precisão (10/09/2026)**: o `REVOKE INSERT` bloqueia só a inserção **direta** feita por `anon`/`authenticated` fora de qualquer RPC — nunca as RPCs `SECURITY DEFINER` legítimas, que continuam funcionando normalmente (rodam com o privilégio do dono `postgres`, não do chamador).
+  - Para **`public.empresas`**: a criação de empresa nova passa **exclusivamente** por `criar_empresa_autorizada` (que substitui `criar_empresa_com_vinculo` e `criar_nova_empresa_com_vinculo` para esse fim).
+  - Para **`public.usuarios_empresas`**: `criar_empresa_autorizada` só insere o vínculo `proprietario` inicial da empresa nova — **continuam existindo, sem nenhuma alteração**, as demais RPCs `SECURITY DEFINER` de gerenciamento de vínculos já publicadas na Fase 4 (`incluir_usuario_empresa`, `alterar_papel_usuario_empresa`, `remover_usuario_empresa`), que seguem sendo os caminhos legítimos para adicionar, alterar ou remover vínculos de usuários numa empresa já existente.
 
 ### Fechamento das RPCs antigas — sem janela vulnerável
 
@@ -135,20 +195,28 @@ values (lower(btrim('<email>')), '<uuid do operador>', now() + interval '72 hour
 | Mesma chamada, depois do `REVOKE` | 🚫 `42501 permission denied` |
 | Cadastro público bloqueado (depois do passo 5) | 🚫 Erro em `signUp()` |
 | Convite novo aceito, ponta a ponta | ✅ |
-| Convite expirado / autorização expirada ou revogada | 🚫 `TRQ52` |
+| Convite expirado / autorização expirada ou revogada | 🚫 `TRQ58` |
 | Usuário existente, sem vínculo, autorizado (link simples) | ✅ |
 | Definição de senha após convite | ✅ |
 | Login de contas existentes (antes/depois de tudo) | ✅ Inalterado |
 | Retry mesmo `p_empresa_id` | ✅ Idempotente |
-| Retry com `p_empresa_id` diferente / 2ª empresa com autorização já consumida | 🚫 `TRQ52` |
-| Duas chamadas simultâneas, UUIDs diferentes | Uma vence, a outra `TRQ52` |
+| Retry com `p_empresa_id` diferente / 2ª empresa com autorização já consumida | 🚫 `TRQ58` |
+| Duas chamadas simultâneas, UUIDs diferentes | Uma vence, a outra `TRQ58` |
 | Nenhuma empresa/vínculo parcial gravado após qualquer rejeição | ✅ (transação única, `ROLLBACK` automático) |
 
-### Arquivos candidatos (nenhum alterado ainda)
+### Arquivos candidatos e estado atual (atualizado em 10/09/2026)
 
-- `index.html` — tela "Defina sua senha", formulário de dados da empresa pós-convite, remoção do link "Criar conta".
-- `script.js` — tratamento de `type=invite`/`type=recovery`, chamada à nova RPC nos dois pontos de entrada, affordance para usuário existente via `existe_autorizacao_onboarding_pendente()`.
-- Nenhuma migração SQL foi salva em arquivo ainda — `qa/fase-5/scripts/` **não foi criada** neste checkpoint, propositalmente.
+- `qa/fase-5/scripts/onboarding-01-migracao-autorizacao.sql` — **criado e revisado estaticamente** (prechecks, DDL, as duas RPCs, os dois endurecimentos acima, `REVOKE EXECUTE` das RPCs antigas, consultas finais de verificação). **Migração ainda NÃO executada em nenhum banco.**
+- `index.html` — candidato, **ainda não alterado**: tela "Defina sua senha", formulário de dados da empresa pós-convite, remoção do link "Criar conta".
+- `script.js` — candidato, **ainda não alterado**: tratamento de `type=invite`/`type=recovery`, chamada à nova RPC nos dois pontos de entrada, affordance para usuário existente via `existe_autorizacao_onboarding_pendente()`.
+
+**Estado atual, por completo**:
+- Arquivo SQL criado e revisado estaticamente (auditoria de leitura, sem execução).
+- Migração ainda **NÃO executada** em nenhum banco/ambiente.
+- Frontend (`index.html`/`script.js`) ainda **NÃO alterado**.
+- As duas RPCs antigas (`criar_empresa_com_vinculo`, `criar_nova_empresa_com_vinculo`) **continuam funcionando normalmente** no banco atual, sem nenhuma restrição — nada mudou em produção.
+- Nenhum convite foi enviado, nenhum e-mail foi autorizado de verdade.
+- **A migração não deve ser executada antes de o frontend novo estar preparado e o procedimento de rollback estar claro** — executar a migração isolada já revoga `EXECUTE` das RPCs antigas para `authenticated`, o que interromperia a criação de empresa (não o login, nem o uso de empresas existentes) até o frontend novo estar publicado.
 
 ### Alinhamento com a Restrição fundamental já registrada nesta fase
 
