@@ -1,3 +1,20 @@
+// Captura o fluxo (invite/recovery) exatamente como o navegador entregou a
+// URL nesta carga de página — ANTES de criar o cliente do Supabase e de
+// qualquer processamento assíncrono dele. Correção de um defeito real
+// (10/09/2026): o SDK do Supabase (detectSessionInUrl) limpa o
+// fragmento/query da URL como parte da própria inicialização, o que pode
+// acontecer antes do nosso onAuthStateChange sequer ser registrado — lendo
+// a URL depois disso, `type=invite` já podia ter sumido (agravado por
+// navegadores in-app como o do Gmail, que reabrem/recarregam o link antes
+// da abertura real). Ler aqui, na primeira linha executável do arquivo, é
+// imune a isso: nada assíncrono roda antes desta atribuição síncrona.
+const URL_AUTH_INICIAL = (function(){
+  var hashBruto = location.hash ? location.hash.substring(1) : '';
+  var hash = new URLSearchParams(hashBruto);
+  var query = new URLSearchParams(location.search);
+  return { tipo: hash.get('type') || query.get('type') || null };
+})();
+
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 const DIAS_AGUARDANDO_RETORNO = 5;
 const LIMITE_AVISOS = 3;
@@ -56,7 +73,10 @@ document.getElementById('authSubmitBtn').addEventListener('click', async ()=>{
 
   const { error } = await sb.auth.signInWithPassword({ email, password });
   if(error){ showAuthError(error.message); return; }
-  await iniciarApp();
+  // viaLoginForm=true: o usuário acabou de digitar a senha neste formulário
+  // — prova de posse da senha, autoriza ir direto a "Cadastrar empresa" se
+  // for o caso (ver iniciarApp).
+  await iniciarApp(true);
 });
 
 function showAuthError(msg){
@@ -68,16 +88,6 @@ function showAuthError(msg){
 // ---------------- ONBOARDING AUTORIZADO POR CONVITE (Incremento 1) ----------------
 // Nenhum ponto deste bloco registra access_token, refresh_token ou o
 // objeto de sessão no console, em nenhuma circunstância.
-
-// O Supabase devolve o tipo do fluxo (invite/recovery/signup) tanto no
-// fragmento da URL (#access_token=...&type=invite) quanto, em fluxos mais
-// novos (PKCE), na query string (?type=recovery) — verifica os dois, sem
-// nunca logar o restante dos parâmetros.
-function extrairTipoAuthDaUrl(){
-  const hash = new URLSearchParams(location.hash ? location.hash.substring(1) : '');
-  const query = new URLSearchParams(location.search);
-  return hash.get('type') || query.get('type') || null;
-}
 
 // Remove fragmento e query string da URL depois que a sessão já foi
 // estabelecida — access_token/refresh_token nunca ficam visíveis na barra
@@ -131,7 +141,11 @@ document.getElementById('definirSenhaSubmitBtn').addEventListener('click', async
       usuarioIdAtual = (userData && userData.user) ? userData.user.id : null;
       abrirTelaEmpresaAutorizada();
     } else {
-      await iniciarApp();
+      // Recuperação de senha: a pessoa acabou de definir/confirmar uma
+      // senha real neste formulário — viaLoginForm=true evita uma volta
+      // desnecessária a "Defina sua senha" (sem loop) caso ela também
+      // esteja, coincidentemente, sem vínculo e autorizada.
+      await iniciarApp(true);
     }
   } catch(erroInesperado){
     mostrarErroDefinirSenha('Não foi possível salvar a senha agora. Tente novamente.');
@@ -243,14 +257,19 @@ document.getElementById('empresaAutorizadaSubmitBtn').addEventListener('click', 
 // onAuthStateChange (evento INITIAL_SESSION), guardado por bootTratado
 // para nunca inicializar duas vezes.
 async function tratarBootComSessao(session){
-  const tipo = extrairTipoAuthDaUrl();
+  const tipo = URL_AUTH_INICIAL.tipo;
   if(session && (tipo === 'invite' || tipo === 'recovery')){
     limparParametrosSensiveisDaUrl();
     abrirTelaDefinirSenha(tipo);
     return;
   }
   if(session){
-    await iniciarApp();
+    // viaLoginForm=false: a sessão chegou pelo boot (armazenamento local
+    // ou link), não pelo usuário digitando a senha nesta carga — iniciarApp
+    // usa isso como segunda camada de proteção (ver comentário lá) para
+    // nunca abrir "Cadastrar empresa" sem senha definida, mesmo que
+    // type=invite/recovery já não esteja mais na URL neste ponto.
+    await iniciarApp(false);
   } else {
     mostrarTela('authScreen');
   }
@@ -459,7 +478,12 @@ async function entrarNaEmpresa(vinculo){
   }
 }
 
-async function iniciarApp(){
+// viaLoginForm (default false): true somente quando quem chamou acabou de
+// confirmar uma senha real nesta carga de página (formulário de login, ou
+// "Defina sua senha" no fluxo de recuperação) — usado como segunda camada
+// de proteção contra pular a definição de senha (ver ramo de zero
+// vínculos abaixo).
+async function iniciarApp(viaLoginForm){
   if(inicializandoApp) return;
   inicializandoApp = true;
   try{
@@ -528,7 +552,17 @@ async function iniciarApp(){
       }
 
       if(autorizado){
-        abrirTelaEmpresaAutorizada(pendente ? metadata : null);
+        if(viaLoginForm){
+          abrirTelaEmpresaAutorizada(pendente ? metadata : null);
+        } else {
+          // Correção do defeito de 10/09/2026: a sessão chegou pelo boot
+          // (não pelo usuário digitando senha nesta carga) — nunca abre
+          // "Cadastrar empresa" direto aqui, mesmo que type=invite já não
+          // esteja mais na URL (ex.: navegador in-app que processa/recarrega
+          // o link antes da nossa checagem). Sempre exige "Defina sua
+          // senha" primeiro nesse caso.
+          abrirTelaDefinirSenha('invite');
+        }
       } else {
         // Sem autorização válida: nenhuma empresa é criada, mesmo que
         // exista metadata pendente antiga — comportamento exigido

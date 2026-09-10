@@ -6,6 +6,33 @@
 
 🔵 **PLANEJADO E COM FRONTEND IMPLEMENTADO LOCALMENTE. Migração ainda NÃO executada, nenhum convite enviado, nenhuma configuração do Supabase alterada, nenhum commit/push feito.** Esta seção consolida, por escrito, a Proposta Técnica v4 do Incremento 1, a auditoria de pré-implementação, o SQL de migração e rollback já criados/revisados, e a implementação local do frontend (ver atualização abaixo).
 
+### Defeito encontrado na Validação 3 de 3 e correção (10/09/2026)
+
+🚨 **DEFEITO REAL, ENCONTRADO EM PRODUÇÃO (commit `7b59054`), CORRIGIDO LOCALMENTE — correção ainda não commitada.**
+
+**Sintoma**: ao abrir o convite real pelo navegador interno do Gmail (celular), o Supabase autenticou a conta, mas o frontend abriu direto a tela "Cadastrar empresa", **pulando "Defina sua senha"**. Confirmado que a autorização não foi consumida e nenhuma empresa foi criada (ninguém clicou em "Criar empresa").
+
+**Causa raiz**: a função que lia `type=invite`/`type=recovery` da URL (`extrairTipoAuthDaUrl()`) só era chamada **depois** de `onAuthStateChange` disparar. O próprio SDK do Supabase (`detectSessionInUrl`, padrão) processa e **limpa o fragmento da URL como parte da sua própria inicialização assíncrona**, ao construir o cliente — isso pode acontecer antes do nosso `onAuthStateChange` sequer ser registrado (só ocorre no fim do arquivo). Quando isso acontece, `location.hash` já está vazio no momento da checagem, `tipo` vem `null`, e o código caía direto em `iniciarApp()` — que, com zero vínculos e autorização pendente, abria "Cadastrar empresa" sem exigir senha. O navegador interno do Gmail (conhecido por processar/recarregar links antes da abertura real) agrava a chance disso acontecer, mas a causa é a ordem de leitura da URL em relação ao processamento assíncrono do próprio SDK — não um comportamento exclusivo do Gmail.
+
+**Correção aplicada em `script.js` (2 camadas):**
+1. **Captura da URL movida para a primeira linha executável do arquivo** (`const URL_AUTH_INICIAL = ...`, antes de `sb = window.supabase.createClient(...)`) — lida de forma síncrona, imune a qualquer limpeza posterior do SDK.
+2. **Rede de segurança independente da URL**: `iniciarApp()` passou a receber um parâmetro `viaLoginForm`. A tela "Cadastrar empresa" só abre diretamente quando a sessão foi estabelecida **pelo próprio formulário de login nesta carga de página** (login normal, ou "Defina sua senha" no fluxo de recuperação — provas de que a pessoa digitou uma senha real). Qualquer sessão vinda do boot (armazenamento local ou link, sem o formulário) sempre passa por "Defina sua senha" primeiro — mesmo que `type=invite` já tenha desaparecido por completo da URL.
+
+**Efeito colateral aceito, documentado**: um usuário existente muito raro (com vínculo zerado por remoção, depois reautorizado, reabrindo uma aba com sessão persistida) passaria por "Defina sua senha" mesmo já tendo uma senha válida — inconveniente de UX, não uma falha de segurança (redefinir a mesma senha é inofensivo). Priorizado deliberadamente sobre o risco de pular a definição de senha.
+
+**Testes locais executados (100% mockado — sem SQL, sem convite real, sem consumir autorização):**
+
+| Cenário | Esperado | Resultado |
+|---|---|---|
+| Convite com `type=invite` na URL | `definirSenhaScreen` visível | ✅ |
+| **Sessão sem `type=invite` na URL (reproduz o defeito relatado)** | `definirSenhaScreen` visível (não mais "Cadastrar empresa" direto) | ✅ **confirma a correção** |
+| Usuário normal, com vínculo | `appScreen` visível, sem passar por telas novas | ✅ |
+| Recuperação de senha (`type=recovery`) | `definirSenhaScreen` visível | ✅ |
+
+Testado com `node --check script.js` (sintaxe válida) e um cliente Supabase simulado via Playwright (nenhuma chamada real de rede, `criar_empresa_autorizada`/`updateUser` nunca invocados de fato). Limitação do método de teste: não foi possível ler `tipoFluxoAuthAtual` de fora do script (variável `let` de topo de nível não fica exposta em `window`) — a confirmação foi feita pela tela efetivamente exibida em cada cenário, que já reflete corretamente esse valor internamente.
+
+**Pendências**: correção ainda não commitada nem publicada — depende da sua revisão. Depois de aprovada, é necessário reexecutar a Validação 3 de 3 com um convite real para confirmar a correção em produção.
+
 ### Validação 1 de 3 — frontend local (10/09/2026) — ✅ APROVADA
 
 Executada com `npx serve -l 53170 .` (mesmo procedimento do projeto) + Playwright (Chrome do sistema) para desktop (1440×900) e mobile (390×844). Nenhum SQL executado, nenhum convite enviado, nenhuma empresa criada, nenhuma senha salva — só login normal de uma conta QA já existente (`QA_EMAIL_PROPRIETARIO`).
