@@ -4,6 +4,10 @@
 
 🔵 **FASE EM PLANEJAMENTO. Nenhum incremento desta fase foi implementado ainda** (nenhum código, banco de dados ou frontend). Este documento existe, por enquanto, só para registrar requisitos futuros e suas dependências, na mesma lógica dos demais `STATUS.md` do projeto.
 
+## Pré-requisito antes de implementar esta fase
+
+🔵 Antes de iniciar a implementação da Fase 5, é necessário concluir a investigação somente leitura de acoplamento à oficina no núcleo compartilhado, registrada como regra 7 em `qa/ARQUITETURA-MULTINICHO.md` — **ainda não realizada**.
+
 ## Restrição fundamental — isolamento dos dados operacionais no Painel Administrativo Central (registrada em 09/09/2026)
 
 🔒 **Requisito de segurança e privacidade da arquitetura multiempresa. Vale para TODAS as sub-fases abaixo (5.1 a 5.4) e para qualquer funcionalidade futura do Painel Administrativo Central — nenhuma delas pode ser desenhada de um jeito que dependa de violar esta restrição.**
