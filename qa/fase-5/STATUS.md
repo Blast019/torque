@@ -1,10 +1,38 @@
 # Fase 5 — SaaS / Administração
 
-Última atualização: 2026-09-10
+Última atualização: 2026-09-11
 
 ## Checkpoint de 10/09/2026 — Incremento 1: onboarding autorizado por convite (Alternativa A)
 
-🔵 **PLANEJADO E COM FRONTEND IMPLEMENTADO LOCALMENTE. Migração ainda NÃO executada, nenhum convite enviado, nenhuma configuração do Supabase alterada, nenhum commit/push feito.** Esta seção consolida, por escrito, a Proposta Técnica v4 do Incremento 1, a auditoria de pré-implementação, o SQL de migração e rollback já criados/revisados, e a implementação local do frontend (ver atualização abaixo).
+🟢 **CONCLUÍDO E PUBLICADO EM PRODUÇÃO (11/09/2026).** Esta seção consolida, por escrito, a Proposta Técnica v4 do Incremento 1, a auditoria de pré-implementação, o SQL de migração e rollback, a implementação do frontend, o defeito encontrado e corrigido, e a conclusão oficial da validação (ver "Conclusão oficial" logo abaixo).
+
+### Conclusão oficial — Incremento 1 concluído e publicado (11/09/2026)
+
+🟢 **INCREMENTO 1 CONCLUÍDO E PUBLICADO EM PRODUÇÃO.** As três validações previstas foram executadas e aprovadas.
+
+**Validação 1 de 3 — frontend local**: ✅ aprovada (ver seção detalhada abaixo).
+
+**Validação 2 de 3 — migração no Supabase**: ✅ executada com sucesso.
+- `qa/fase-5/scripts/onboarding-01-migracao-autorizacao.sql` aplicada no banco de produção.
+- **Site URL** configurada como `https://torque.tec.br`.
+- **Redirect URL** configurada como `https://torque.tec.br/**`.
+- `INSERT` direto em `public.empresas` e `public.usuarios_empresas` confirmado **bloqueado** para `anon` e `authenticated` (só `criar_empresa_autorizada`, `SECURITY DEFINER`, continua como via de escrita).
+
+**Defeito real encontrado no primeiro teste (dispositivo real)**: o convite abriu diretamente a tela de cadastro da empresa, **pulando a definição de senha**. Causa raiz: o SDK do Supabase consumia/limpava o marcador `type=invite` da URL antes da leitura tardia feita pelo frontend (`onAuthStateChange` registrado só no fim do arquivo) — detalhamento completo já registrado na seção "Defeito encontrado na Validação 3 de 3 e correção" logo abaixo.
+
+**Correção publicada** (commit `ec01b94`): captura da URL movida para a primeira linha executável do arquivo (antes da criação do cliente Supabase) + proteção adicional independente da URL — uma sessão autorizada sem vínculo só pula direto para "Cadastrar empresa" quando chega pelo próprio formulário de login desta carga de página; qualquer sessão vinda do boot (armazenamento local ou link) sempre passa por "Defina sua senha" primeiro. Validação local direcionada aprovada nos 4 cenários (convite com `type=invite`, sessão sem `type` na URL, usuário normal com vínculo, recuperação de senha) — resultados já registrados na seção "Defeito encontrado..." abaixo.
+
+**Validação 3 de 3 — teste real em celular, após a correção**: ✅ **APROVADA**. Confirmado que a definição de senha foi exigida antes da criação da empresa (sem repetir o defeito). Evidência real:
+- E-mail: `weversonantonio27+convitetorque@gmail.com`
+- Autorização (`autorizacoes_onboarding.id`): `2825ed30-5002-4559-b4a5-715227f6151b`
+- Usuário criado (`auth.users.id`): `166e0c8d-ad66-4448-b959-3a586c8fab9d`
+- Empresa criada (`empresas.id`): `79225aa6-87bc-4d03-a023-35304145e60f`
+- Nome da empresa: `QA convite 2026-09-11`
+- `consumido_em`: `2026-09-11 00:08:10.426463+00`
+- Papel do vínculo: `proprietario`, `ativo = true`
+- `revogado_em`: `null`
+
+**Preservação da evidência**: a conta e a empresa QA criadas neste teste real **foram preservadas** (nenhuma exclusão) como evidência de regressão, até uma decisão futura de limpeza — não excluir sem autorização explícita separada.
 
 ### Defeito encontrado na Validação 3 de 3 e correção (10/09/2026)
 
