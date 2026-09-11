@@ -2,6 +2,138 @@
 
 Última atualização: 2026-09-11
 
+## Checkpoint de 11/09/2026 — Redesenho do Torque-Admin revisado, testado e publicado
+
+🟢 **Redesenho visual e de navegação do Painel Administrativo Central revisado, testado (mockado e real) e publicado separadamente — concluído.**
+
+### Publicação
+
+- **Repositório**: `Blast019/torque-admin`.
+- **Domínio**: `admin.torque.tec.br`.
+- **Commit do redesenho**: `e3736e3` — `feat(painel): redesenhar identidade visual e navegacao do painel administrativo`. Arquivos: `index.html`, `script.js`, `style.css`.
+- **Commit da correção responsiva**: `b7580dd` — `fix(layout): manter botao de logout visivel em telas estreitas`. Arquivo: somente `style.css`.
+- Os dois pushes foram **fast-forward, sem `--force`**.
+- `CNAME` e `config.js` do `Torque-Admin` **não foram alterados** em nenhuma dessas etapas.
+- O **repositório principal `Torque` não foi alterado** durante a revisão e publicação do painel.
+
+### Auditoria mockada (Playwright, sem nenhuma chamada real ao Supabase) — 11/11 testes aprovados
+
+- Login inválido e login administrativo: **aprovados**.
+- Bloqueio e logout automático para conta não administradora: **aprovados**.
+- Logout administrativo: **aprovado**.
+- Listagem, os quatro indicadores (Pendentes/Consumidas/Expiradas/Revogadas) e os cinco filtros: **aprovados**.
+- Autorizar, renovar e proteção contra duplo clique: **aprovados**.
+- Revogação — cancelamento e confirmação: **aprovados**.
+- Confirmado que só as quatro RPCs administrativas já existentes são usadas (`sou_administrador_plataforma`, `admin_listar_autorizacoes_onboarding`, `admin_autorizar_onboarding`, `admin_revogar_autorizacao_onboarding`) — nenhuma `service_role`, senha, token privado ou acesso direto a tabela foi introduzido.
+- `node --check` e `git diff --check`: **aprovados**.
+- Testes responsivos (desktop, notebook, mobile): **aprovados**.
+
+### Teste real publicado (dispositivo real, contra `admin.torque.tec.br` em produção)
+
+- Computador: **aprovado**, sem barra de rolagem horizontal da página.
+- Celular: **aprovado**.
+- Botão "Sair" totalmente visível nos dois dispositivos.
+- O e-mail administrativo (comprido, com `+admintorque`) não empurra mais o botão para fora — defeito real encontrado após a primeira publicação, corrigido pelo commit `b7580dd` acima.
+- A navegação horizontal do menu lateral no celular (faixa com rolagem própria, comportamento intencional) foi visualizada e **aprovada pelo usuário** como comportamento desejado.
+
+**Redesenho do `Torque-Admin` considerado concluído e publicado.**
+
+### Próximo passo
+
+1. Versionar este checkpoint e o planejamento financeiro já pendente (seção "Planejamento revisado do Incremento 3", logo abaixo).
+2. Depois, iniciar — em etapa separada e **apenas como planejamento** — a revisão técnica do Incremento 3.1.
+3. **Não implementar ainda o Incremento 3.1.**
+
+## Checkpoint de 11/09/2026 — Planejamento revisado do Incremento 3 (Painel Administrativo Central: Operação e Financeiro) — aprovado com 4 correções obrigatórias
+
+🔵 **PLANEJAMENTO. Nenhuma implementação iniciada nesta etapa — nenhuma tabela criada, nenhum SQL executado, nenhum arquivo do painel (`Blast019/torque-admin`) alterado.**
+
+### Contexto
+
+Depois da conclusão do Incremento 2.2 (Onboarding, testado e aprovado em produção) e da transferência do painel para `Blast019/torque-admin`, foi pedido o planejamento do que o painel deve se tornar: centro de acompanhamento da operação da Torque — visão geral da plataforma, faturamento da própria Torque (distinto do faturamento interno das empresas clientes), controle de despesas, custos e rentabilidade por empresa, e monitoramento agregado do WhatsApp. Uma primeira proposta de modelo de dados e incrementos foi apresentada em conversa e **aprovada com 4 correções obrigatórias**, já incorporadas abaixo. Este documento registra o planejamento corrigido e o ponto exato de retomada — nenhum incremento de código foi iniciado.
+
+### Correção 1 — Identidade permanente da assinatura
+
+A proposta original fechava (`encerrada_em`) e criava uma nova linha em `assinaturas` a cada mudança de plano ou situação — **rejeitado**: transformaria artificialmente a mesma empresa em um "novo assinante" a cada mudança, distorcendo qualquer indicador de novas assinaturas x cancelamentos. Modelo corrigido:
+
+- **`assinaturas`** — contrato permanente da empresa, uma linha por empresa, **com o mesmo `id` para sempre**: `id`, `empresa_id` (único), `plano_id` (plano atual — cache do estado corrente), `situacao` (situação atual — cache do estado corrente), `iniciada_em`, `criado_em`.
+- **`assinaturas_historico`** — todo evento de mudança (plano, situação, datas, motivo), nunca apagado nem sobrescrito: `id`, `assinatura_id`, `plano_id` (vigente a partir deste evento), `situacao` (vigente a partir deste evento), `vigente_desde`, `vigente_ate` (nulo enquanto for o evento mais recente — fechado pela própria RPC de mudança no mesmo instante em que abre o próximo evento, mesmo padrão de índice único parcial já usado em `autorizacoes_onboarding`), `motivo`, `registrado_por` (nulo quando a mudança for automática, ex.: suspensão por inadimplência).
+- **Regra obrigatória de implementação**: nenhuma RPC pode escrever em `assinaturas.plano_id`/`situacao` sem, na mesma transação, fechar o evento anterior e inserir o novo evento em `assinaturas_historico`. Não haverá via de escrita direta nessas colunas fora dessa RPC única.
+- **`cobrancas`** passa a tratar só a obrigação financeira por competência (não mistura mais com recebimento): `id`, `assinatura_id`, `competencia`, `valor_previsto`, `valor_faturado` (nulo até ser efetivamente emitida), `desconto`, `vencimento`, `status` (prevista/faturada/paga/parcialmente_paga/atrasada/inadimplente/cancelada), `criado_em`.
+- **`pagamentos`** (nova, separada de `cobrancas`) — todo recebimento, taxa, estorno e identificador do provedor, sempre como evento próprio, nunca sobrescrevendo um pagamento anterior: `id`, `cobranca_id`, `valor_recebido`, `taxa_pagamento`, `estorno` (boolean) + `valor_estornado` (nulo se não for estorno), `forma_pagamento` (manual por enquanto — sem integração de meio de pagamento ainda, mesma restrição já registrada na seção 5.2 abaixo), `identificador_externo` (referência do provedor, para quando houver integração — hoje nulo), `recebido_em`, `registrado_por`, `observacao`. Uma cobrança pode ter zero, um ou vários pagamentos (parcial + complemento depois, ou pagamento + estorno posterior como linha própria).
+
+### Correção 2 — Prevenção de custos duplicados
+
+Risco identificado: o custo de consumo do WhatsApp (quando `whatsapp_uso_mensal.custo` existir) poderia ser contado uma vez como "consumo" e de novo, separadamente, como uma linha digitada manualmente em `despesas` — duplicando o custo na rentabilidade. Corrigido com uma camada de reconciliação obrigatória para toda origem automática de custo:
+
+- **`lancamentos_custo`** — única ponte entre qualquer origem automática de custo (hoje: WhatsApp; no futuro: outras integrações) e a despesa efetivamente contabilizada: `id`, `origem` (ex.: `whatsapp_consumo`, extensível), `empresa_id` (nulo se compartilhado), `competencia`, `identificador_externo` (id no provedor/origem, quando houver), `valor`, `situacao` (`pendente`/`lancado`/`ignorado_duplicado`/`estornado`), `referencia_origem_id` (aponta para o registro de consumo de origem, ex.: `whatsapp_uso_mensal.id`), `despesa_id` (nulo até virar de fato uma linha em `despesas`; preenchido quando `situacao='lancado'`), `criado_em`.
+- **Proteção contra duplicidade**: `UNIQUE (origem, identificador_externo) WHERE identificador_externo IS NOT NULL`, e `UNIQUE (origem, empresa_id, competencia) WHERE origem <> 'manual'` — uma tentativa de lançar o mesmo consumo agregado da mesma empresa na mesma competência falha em vez de duplicar.
+- **Fluxo**: uma RPC de "lançar custos do período" varre as origens automáticas, tenta inserir em `lancamentos_custo` (protegido pelas UNIQUEs acima) e só então cria a `despesa` correspondente, vinculando `despesa_id`. Despesas **manuais** continuam indo direto para `despesas`, sem passar por esta camada — o risco que esta correção resolve é o de origens automáticas/repetíveis, não o de digitação manual isolada.
+- Se o provedor corrigir um valor já lançado, o tratamento é **estorno do lançamento anterior + novo lançamento**, nunca `UPDATE` do valor já contabilizado — mesma filosofia de auditoria usada em `pagamentos`.
+
+### Correção 3 — Rateio proporcional a dias-empresa
+
+`regras_rateio.metodo` passa a ter `dias_empresa` como **primeiro método recomendado e padrão inicial** (o rateio igualitário simples fica só como alternativa, não como padrão):
+
+1. Para a competência, calcular `dias_ativos` de cada empresa = dias do mês em que a assinatura da empresa esteve numa situação elegível (recomendação inicial: `ativa` e `inadimplente` contam, `teste`/`suspensa`/`cancelada` não contam — **regra de negócio a confirmar explicitamente quando o Incremento 3.7 começar**, não decidida agora).
+2. `total_dias_empresa` = soma de `dias_ativos` de todas as empresas na competência.
+3. `custo_compartilhado_do_periodo` = soma de `despesas` com `empresa_id IS NULL` (incluindo custos automáticos compartilhados via `lancamentos_custo`) na competência.
+4. `parcela_da_empresa` = `custo_compartilhado_do_periodo × (dias_ativos_da_empresa ÷ total_dias_empresa)`.
+5. `dias_ativos` é derivado por sobreposição de intervalo sobre `assinaturas_historico.vigente_desde/vigente_ate` — por isso a Correção 1 (intervalos explícitos, fechados pela própria RPC) é pré-requisito direto desta correção.
+
+`regras_rateio.parametros` (jsonb) guarda a configuração de cada método (ex.: quais situações contam como "dias ativos"; pesos por plano no futuro `proporcional_plano`) — a arquitetura já nasce permitindo os métodos futuros (`proporcional_plano`, `proporcional_consumo`) sem alterar o schema, só o valor de `metodo` e o conteúdo de `parametros`.
+
+**Risco técnico adicional identificado nesta correção**: divisão proporcional gera resíduo de arredondamento (centavos) que pode não fechar exatamente o total da despesa compartilhada. A RPC de rateio precisa absorver esse resíduo de forma determinística para que a soma das parcelas sempre feche exatamente com o valor original — detalhe a especificar tecnicamente no Incremento 3.7.
+
+### Correção 4 — Separação dos indicadores financeiros
+
+Glossário fixado (vale para toda tela e toda RPC deste módulo, sem exceção):
+
+| Indicador | Definição | Fonte |
+|---|---|---|
+| **MRR contratado** | Soma do valor de plano vigente das assinaturas em situação elegível na data de referência — valor de **contrato**, não fluxo de caixa | `assinaturas` + `planos_historico_precos` |
+| **Receita prevista** | Soma de `cobrancas.valor_previsto` da competência — o que **deveria** ser cobrado | `cobrancas` |
+| **Valor faturado** | Soma de `cobrancas.valor_faturado` — o que foi **efetivamente emitido** (pode divergir do previsto por desconto/proração) | `cobrancas` |
+| **Valor recebido** | Soma de `pagamentos.valor_recebido` menos estornos, vinculados a cobranças da competência — dinheiro que **realmente entrou** | `pagamentos` |
+| **Valores pendentes** | Cobranças faturadas/previstas sem pagamento suficiente e **ainda dentro do vencimento** | `cobrancas` + `pagamentos` |
+| **Inadimplência** | Cobranças **vencidas** sem pagamento suficiente — distinto de "pendente" | `cobrancas` + `pagamentos` |
+| **Resultado operacional** | Receita recebida − custo total (direto + compartilhado rateado) — rentabilidade **antes** de taxas/impostos | `pagamentos` + custos |
+| **Resultado líquido** | Resultado operacional − taxas de pagamento − impostos | idem + `pagamentos.taxa_pagamento` |
+| **Margem líquida** | Resultado líquido ÷ receita recebida × 100 | derivado |
+
+**Regra explícita, sem exceção**: nenhuma tela ou RPC pode apresentar "valor previsto" ou "valor faturado" rotulado como "recebido" — os três são sempre exibidos separadamente, nunca somados como se fossem equivalentes.
+
+### Outros riscos identificados nesta revisão
+
+- **Divergência entre competências**: despesa/pagamento registrado num mês pode se referir a uma competência diferente (ex.: despesa paga em outubro, competência setembro). Todo agregado **deve agrupar por `competencia`**, nunca pela data do evento (`data_pagamento`/`criado_em`/`recebido_em`).
+- **Fechamento mensal x lançamento tardio**: se uma despesa/cobrança de uma competência já fechada em `resultados_mensais` for lançada/corrigida depois, o mês fechado **não muda sozinho** — precisa de uma ação administrativa explícita e auditável de "reabrir e refechar o mês", nunca recálculo automático silencioso.
+- **Divisão por zero no rateio**: se não houver nenhum dia-empresa no período, a RPC de rateio não pode dividir por zero — precisa tratar como "sem rateio possível neste período", nunca falhar sem tratamento nem retornar valor inventado.
+- **Identidade de empresa x identidade de assinatura**: a "identidade permanente" da Correção 1 vale por `empresa_id`. Uma empresa que realmente encerra e depois é recriada como cadastro novo (novo `empresas.id`, fluxo normal de onboarding) gera, por definição, uma nova assinatura — isso não é o caso que a Correção 1 evita (fechar/reabrir artificialmente a assinatura da **mesma** empresa).
+
+### Decisões aprovadas para este momento
+
+- Planos, assinaturas, cobranças, pagamentos, despesas e rentabilidade serão administrados **somente pelo Painel Administrativo Central** nesta fase.
+- **Futuramente**, cada empresa poderá consultar somente o próprio plano e as próprias cobranças, por RPC específica e segura (filtrada pela própria empresa) — não implementado agora; arquitetura já compatível (RPC `SECURITY DEFINER` gated pelo vínculo ativo do usuário com a própria empresa, sem policy aberta).
+- Nenhum acesso a dado financeiro operacional interno dos estabelecimentos (reforça a "Restrição fundamental" já registrada nesta fase, ver abaixo).
+- Nenhum dado fictício será exibido como se fosse real em nenhuma tela deste módulo.
+- WhatsApp só entra **depois** da futura integração de mensagens (Fase 7) existir de fato.
+
+### Ordem de trabalho registrada (nenhum item iniciado)
+
+1. Validar e publicar **separadamente** o redesenho visual já existente do `Torque-Admin`.
+2. Consultar o esquema real de `empresas` no Supabase, **sem alteração** — confirmar colunas hoje desconhecidas (data de criação, nicho) antes de desenhar a migração do Incremento 3.1.
+3. Incremento 3.1 — Visão Geral, somente com dados reais.
+4. Incremento 3.2 — Catálogo e histórico de preços dos planos.
+5. Incremento 3.5 — Despesas.
+6. Incremento 3.3/3.4 — Assinaturas (modelo corrigido acima), histórico, cobranças e pagamentos.
+7. Incremento 3.6 — Rateio (método `dias_empresa`), custos e rentabilidade.
+8. Incremento 3.7 — Fechamento mensal.
+9. Incremento 3.8 — Métricas de WhatsApp, somente depois da integração de mensagens (Fase 7) existir.
+
+### Ponto exato de retomada
+
+🔵 **O próximo passo NÃO é o Incremento 3.1.** É revisar e publicar **separadamente** o redesenho visual já existente e aprovado localmente do `Torque-Admin` (identidade escura/laranja, navegação lateral, indicadores do Onboarding — ainda pendente de commit/push em `Blast019/torque-admin`, sem nenhuma dependência do modelo financeiro acima). Só depois dessa publicação, retomar pelo passo 2 da ordem de trabalho acima (consulta ao esquema real de `empresas`).
+
 ## Checkpoint de 11/09/2026 — Teste real do painel aprovado; painel transferido para repositório próprio
 
 🟢 **Teste manual real do Incremento 2.2 aprovado pelo usuário. Painel administrativo transferido do repositório Torque para o repositório público separado `Blast019/torque-admin`** (criação e publicação desse repositório é uma etapa própria, registrada junto com este checkpoint).
@@ -463,6 +595,8 @@ A divisão em 5.1 a 5.4 foi proposta em conversa em 09/09/2026, durante o planej
 - Manter histórico de mudanças de preço.
 - Definir como as mudanças de preço afetam assinaturas já existentes (aplicação imediata, só em renovações futuras, ou por regra de transição — ainda a ser definido).
 - **Separar claramente** a assinatura SaaS paga pelo estabelecimento à Torque das futuras assinaturas que um estabelecimento (ex.: uma barbearia) poderá oferecer aos próprios clientes — são dois conceitos de "assinatura" diferentes, e a estrutura de dados não deve misturá-los.
+
+**Detalhamento técnico completo** (modelo de dados corrigido de `assinaturas`/`assinaturas_historico`/`cobrancas`/`pagamentos`, despesas, rateio por dias-empresa, indicadores financeiros e ordem de incrementos) registrado no checkpoint "Planejamento revisado do Incremento 3 (Painel Administrativo Central: Operação e Financeiro)", no topo deste documento.
 
 ## 5.3 — URL personalizada
 
