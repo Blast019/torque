@@ -2,6 +2,238 @@
 
 Última atualização: 2026-09-11
 
+## Checkpoint de 11/09/2026 — Incremento 3.1: diagnóstico real confirmado e desenho técnico da RPC de Visão Geral
+
+🔵 **INVESTIGAÇÃO CONCLUÍDA E DESENHO TÉCNICO PROPOSTO. Nada executado, nada implementado, nenhum arquivo de migração criado ainda.**
+
+### Diagnóstico executado no banco real (SQL somente leitura, sem escrita)
+
+O script de diagnóstico (colunas, constraints, índices, RLS, policies, triggers, grants, dependências, contagens agregadas) foi executado pelo usuário no SQL Editor do Supabase. Resultados reais:
+
+**`public.empresas` — schema confirmado:**
+
+| Coluna | Tipo | Nulo? | Default |
+|---|---|---|---|
+| `id` | uuid | não | `gen_random_uuid()` |
+| `owner_id` | uuid | não | — (FK `auth.users(id)` `ON DELETE CASCADE`) |
+| `nome` | text | não | `'Minha oficina'::text` |
+| `criado_em` | timestamptz | não | `now()` |
+| `cnpj` | text | sim | — |
+| `telefone` | text | sim | — |
+| `plano` | text | não | `'Teste'::text` |
+| `status_assinatura` | text | não | `'ativo'::text` |
+
+- **`empresas.criado_em` existe de verdade** — não precisa de proxy via `usuarios_empresas.criado_em` (hipótese da investigação anterior, agora descartada por desnecessária).
+- **Nenhuma `CHECK` constraint** em `plano` nem `status_assinatura` — são texto livre, sem lista fechada de valores garantida pelo banco (só 2 constraints existem na tabela: `empresas_pkey` e `empresas_owner_id_fkey`).
+- **Confirmada ausência total** de `nicho`, `segmento`, `situacao_acesso`, `bloqueado`/`bloqueada`, `suspenso`/`suspensa`, `contato_administrativo`, `contato_financeiro`, `plano_id`, `assinatura_id` — em `empresas` e em `usuarios_empresas`. Nenhuma estrutura financeira formal existe (planos/assinaturas/cobranças continuam sendo só planejamento, ver checkpoint de "Incremento 3" acima).
+- **RLS**: ativo, não forçado (`relforcerowsecurity=false`, irrelevante pois `postgres`/RPCs `SECURITY DEFINER` sempre puderam ler tudo). 4 policies: `empresa_select_own`, `empresa_update_own`, `empresa_delete_own` (todas `owner_id = auth.uid()`) e `empresa_select_usuario_vinculado` (`authenticated`, via `usuario_pertence_empresa(id, auth.uid())`). **Nenhuma policy de `INSERT`** — consistente com o fechamento do Incremento 1.
+- **FKs apontando para `empresas`** (todas `ON DELETE CASCADE`): `agendamentos`, `caixa_movimentos`, `clientes`, `fornecedores`, `funcionarios`, `movimentos_caixa`, `ordens_servico`, `pecas`, `usuarios_empresas`, `veiculos`.
+- **Achado lateral, não investigado a fundo**: existem duas tabelas com nomes muito parecidos referenciando `empresas` — `movimentos_caixa` (a que o app realmente usa, confirmado em `script.js`) e `caixa_movimentos` (nunca referenciada em nenhum código lido nesta sessão). Pode ser uma tabela legada/abandonada. **Não foi investigada a fundo e não se conclui que pode ser removida** — só registrado como candidato a uma investigação futura própria, fora do escopo do Incremento 3.1.
+- **Contagens reais** (11/09/2026): `10` empresas cadastradas; `13` vínculos em `usuarios_empresas` (`12` ativos, `1` inativo); as `10` empresas têm pelo menos um vínculo. Hoje, **100% das empresas** estão com `status_assinatura='ativo'` e `plano='Teste'` (zero variedade nos dados reais atuais — não há hoje nenhuma empresa em outro plano ou status).
+
+**Achado de acoplamento ao nicho "oficina" (regra 7 de `qa/ARQUITETURA-MULTINICHO.md`)**: além do acoplamento já conhecido em `script.js` (IDs/textos de interface como `oficinaNome`, `"Informe o nome da oficina"`), o diagnóstico revela que o **próprio schema do banco** tem esse acoplamento — `empresas.nome DEFAULT 'Minha oficina'::text`. Isso não bloqueia o Incremento 3.1 (a RPC de Visão Geral não depende do valor de `nome`), mas é um achado mais sério que os anteriores por estar no nível do banco, não só do frontend — registrado aqui para a futura investigação completa da regra 7.
+
+**Achado de segurança — item obrigatório de hardening futuro, fora do escopo do Incremento 3.1**: `anon` e `authenticated` têm `DELETE`, `UPDATE` e **`TRUNCATE`** concedidos diretamente em `public.empresas` (só `INSERT` já foi revogado, no Incremento 1). `SELECT`/`UPDATE`/`DELETE` são efetivamente contidos pelas 4 policies de RLS (nunca exploráveis pela superfície real do app, que só fala com o banco via PostgREST/RPCs). `TRUNCATE` **não é filtrado por RLS** — só seria explorável por alguém com conexão Postgres direta como `anon`/`authenticated`, o que a aplicação real não expõe (PostgREST não tem endpoint de `TRUNCATE`). **Não é explorável pela superfície de ataque atual**, mas viola o princípio do menor privilégio já registrado como requisito pendente em "Segurança e proteção de dados" (acima). **Registrado como item obrigatório de hardening futuro — não corrigido agora, e a investigação não foi ampliada para as outras 9 tabelas com FK para `empresas`** (decisão explícita: manter o escopo desta etapa restrito a `empresas`).
+
+### Desenho técnico proposto — Incremento 3.1: RPC `admin_visao_geral_empresas`
+
+🔵 **PROPOSTA. Nenhum SQL executado, nenhum arquivo de migração criado ainda — aguardando aprovação antes de salvar o script.**
+
+**Uma única RPC**, `SECURITY DEFINER`, `STABLE`, `SET search_path TO ''`, gated pelo mesmo padrão das RPCs administrativas já existentes (`administradores_plataforma`, ativo). Retorna um único `jsonb` agregando os cortes já possíveis com dado real hoje — evita múltiplas idas ao banco para montar uma tela de dashboard, e permite estender a estrutura no futuro sem trocar de RPC.
+
+🟡 **Correção de revisão (11/09/2026)**: a série mensal agora usa explicitamente o fuso `America/Sao_Paulo` (tanto no limite gerado por `generate_series` quanto no agrupamento de `empresas.criado_em`), evitando que uma empresa criada perto da virada do mês em UTC caia no mês errado quando vista em horário de São Paulo. O intervalo usa `make_interval(months => ...)`, não concatenação de texto. As duas distribuições (`status_assinatura`/`plano`) agora têm ordenação determinística (`ORDER BY total DESC, <coluna>`) — sem isso, duas execuções com o mesmo dado podiam retornar a mesma contagem em ordens diferentes.
+
+```sql
+CREATE FUNCTION public.admin_visao_geral_empresas(
+  p_meses_serie integer DEFAULT 12
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path TO ''
+AS $function$
+DECLARE
+  v_usuario_id uuid;
+  v_eh_admin   boolean;
+  v_resultado  jsonb;
+BEGIN
+  v_usuario_id := auth.uid();
+  IF v_usuario_id IS NULL THEN
+    RAISE EXCEPTION USING
+      ERRCODE = 'TRQ61',
+      MESSAGE = 'nao_autenticado',
+      DETAIL  = 'auth.uid() retornou null nesta chamada.';
+  END IF;
+
+  SELECT EXISTS(
+    SELECT 1 FROM public.administradores_plataforma a
+     WHERE a.user_id = v_usuario_id AND a.ativo = true
+  ) INTO v_eh_admin;
+
+  IF NOT v_eh_admin THEN
+    RAISE EXCEPTION USING
+      ERRCODE = 'TRQ62',
+      MESSAGE = 'sem_permissao_administrativa',
+      DETAIL  = 'usuario autenticado nao e administrador ativo da plataforma.';
+  END IF;
+
+  IF p_meses_serie IS NULL OR p_meses_serie < 1 OR p_meses_serie > 36 THEN
+    RAISE EXCEPTION USING
+      ERRCODE = 'TRQ63',
+      MESSAGE = 'entrada_invalida',
+      DETAIL  = 'p_meses_serie precisa estar entre 1 e 36.';
+  END IF;
+
+  -- Todos os limites e agrupamentos de mes abaixo sao calculados em
+  -- America/Sao_Paulo, nunca no fuso da sessao do banco (normalmente UTC) -
+  -- uma empresa criada as 23h30 de SP no ultimo dia do mes e ja madrugada
+  -- do mes seguinte em UTC; sem a conversao explicita ela apareceria no
+  -- mes errado.
+  SELECT jsonb_build_object(
+    'total_empresas', (SELECT count(*) FROM public.empresas),
+    'vinculos', jsonb_build_object(
+      'total',               (SELECT count(*) FROM public.usuarios_empresas),
+      'ativos',              (SELECT count(*) FROM public.usuarios_empresas WHERE ativo),
+      'inativos',            (SELECT count(*) FROM public.usuarios_empresas WHERE NOT ativo),
+      'empresas_com_vinculo',(SELECT count(DISTINCT empresa_id) FROM public.usuarios_empresas)
+    ),
+    'novas_empresas_por_mes', (
+      SELECT jsonb_agg(jsonb_build_object('mes', to_char(mes, 'YYYY-MM'), 'total', coalesce(t.total, 0)) ORDER BY mes)
+      FROM generate_series(
+             date_trunc('month', (now() AT TIME ZONE 'America/Sao_Paulo')) - make_interval(months => p_meses_serie - 1),
+             date_trunc('month', (now() AT TIME ZONE 'America/Sao_Paulo')),
+             interval '1 month'
+           ) AS mes
+      LEFT JOIN (
+        SELECT date_trunc('month', criado_em AT TIME ZONE 'America/Sao_Paulo') AS mes, count(*) AS total
+          FROM public.empresas
+         GROUP BY 1
+      ) t USING (mes)
+    ),
+    'distribuicao_status_assinatura', (
+      SELECT coalesce(jsonb_agg(jsonb_build_object('valor', status_assinatura, 'total', total) ORDER BY total DESC, status_assinatura), '[]'::jsonb)
+        FROM (SELECT status_assinatura, count(*) AS total FROM public.empresas GROUP BY status_assinatura) t
+    ),
+    'distribuicao_plano', (
+      SELECT coalesce(jsonb_agg(jsonb_build_object('valor', plano, 'total', total) ORDER BY total DESC, plano), '[]'::jsonb)
+        FROM (SELECT plano, count(*) AS total FROM public.empresas GROUP BY plano) t
+    ),
+    'gerado_em', now()
+  ) INTO v_resultado;
+
+  RETURN v_resultado;
+END;
+$function$;
+```
+
+**Decisões de desenho**:
+- **Nenhum código TRQ novo**: `TRQ61`/`TRQ62` são reaproveitados — pertencem à mesma família de RPCs administrativas (mesma tabela `administradores_plataforma`, mesmo significado exato) criada no `admin-01`. `TRQ63` (`entrada_invalida`) também já existe nessa família, reaproveitado só para validar `p_meses_serie`.
+- **`plano`/`status_assinatura` tratados como texto legado**: `GROUP BY` direto na coluna, sem `CASE`/mapa de rótulos, sem presumir nenhum valor fechado — o que existir de verdade no banco aparece como está.
+- **Série de 12 meses (padrão) sempre contínua e sempre em `America/Sao_Paulo`**: usa `generate_series` + `LEFT JOIN`, com `AT TIME ZONE 'America/Sao_Paulo'` explícito nos dois lados do `JOIN` (limites da série e agrupamento de `criado_em`) — garante que meses sem nenhuma empresa nova apareçam com `total:0`, e que o mês de cada empresa nova seja o mês real em horário de São Paulo, nunca o de UTC.
+- **`make_interval(months => p_meses_serie - 1)`** no lugar de concatenar texto para montar o intervalo — evita qualquer ambiguidade de formatação/parsing de intervalo.
+- **Ordenação determinística** nas duas distribuições (`ORDER BY total DESC, <coluna>`) — em caso de empate na contagem, o desempate por ordem alfabética do próprio valor garante que a mesma consulta sempre retorne a mesma ordem.
+- **Nenhum dado individual de empresa** (`nome`, `cnpj`, `telefone`) nem de usuário — só contagens e os dois textos administrativos (`plano`/`status_assinatura`), consistentes com a "Restrição fundamental" já registrada nesta fase.
+- **Nenhum `nicho`, bloqueio, MRR ou indicador financeiro** incluído — todos continuam bloqueados por dependerem de estruturas ainda inexistentes (ver seção acima).
+
+**Estrutura da futura migração** (quando o arquivo for de fato criado — ainda não foi):
+1. `BEGIN;`
+2. Precheck (`DO $$ ... $$`) que confirma que `public.empresas`, `public.usuarios_empresas` e `public.administradores_plataforma` existem, **e que `admin_visao_geral_empresas(integer)` ainda NÃO existe** — aborta com `RAISE EXCEPTION` se qualquer uma dessas condições falhar, sem alterar nada.
+3. `CREATE FUNCTION` (não `CREATE OR REPLACE FUNCTION` — a função é nova; usar `CREATE` puro garante que a migração falha alto e claro se, por qualquer motivo, ela já existir, em vez de silenciosamente substituir algo).
+4. `ALTER FUNCTION ... OWNER TO postgres`, `REVOKE ALL ... FROM PUBLIC, anon`, `GRANT EXECUTE ... TO authenticated, service_role`.
+5. Consultas finais **somente leitura** de verificação (existência da função, `has_function_privilege` para `authenticated`).
+6. `COMMIT;`
+
+**Riscos identificados**:
+- Sem índice em `empresas.criado_em`/`plano`/`status_assinatura` — irrelevante com 10 linhas hoje; se a base crescer muito, agregações passam a fazer *sequential scan* — não é um problema atual, só uma revisão futura de performance se necessário.
+- `plano`/`status_assinatura` sem `CHECK`: a distribuição pode expor inconsistência de texto (ex.: variações de maiúscula/minúscula ou espaço) se algum dia forem gravados fora do `DEFAULT` — a RPC só reporta o que existe, não normaliza; isso fica resolvido de verdade só no Incremento 3.2 (catálogo de planos).
+- `criado_em` como marco de "nova empresa" é a data real de criação da linha, mas pode não corresponder ao início comercial exato em casos históricos de correção manual (ex.: o ajuste de `owner_id` já documentado no `qa/fase-2.5/STATUS.md`) — não é um problema para o Incremento 3.1 (não há esses casos hoje), só uma ressalva de interpretação.
+- **Fuso horário — risco corrigido nesta revisão, mas que precisa de teste dedicado**: antes da correção, `date_trunc('month', now())`/`date_trunc('month', criado_em)` dependiam do fuso da sessão do banco (normalmente UTC), podendo classificar uma empresa criada no fim da noite (horário de SP) já como do mês seguinte. Corrigido com `AT TIME ZONE 'America/Sao_Paulo'` explícito nos dois pontos — mas isso só fica realmente validado com um teste que crie um registro perto da virada do mês em UTC e confirme o mês correto em SP (ver testes abaixo).
+- Contrato do retorno é `jsonb`: qualquer mudança de estrutura no futuro precisa ser versionada com cuidado pelo consumidor (o frontend do `Torque-Admin`).
+
+**Testes previstos, quando implementado** (mesmo padrão já usado no Onboarding — mockado + real):
+- Administrador ativo recebe o `jsonb` completo, com as **6 chaves de topo** (`total_empresas`, `vinculos`, `novas_empresas_por_mes`, `distribuicao_status_assinatura`, `distribuicao_plano`, `gerado_em`); não autenticado recebe `TRQ61`; autenticado não administrador recebe `TRQ62`; `p_meses_serie` fora de `[1,36]` recebe `TRQ63`.
+- `total_empresas`, `vinculos.*` batem exatamente com os números do diagnóstico real (Blocos 11-1/11-2 desta sessão) no momento do teste.
+- `novas_empresas_por_mes` sempre retorna exatamente `p_meses_serie` pontos, mesmo com meses zerados.
+- `distribuicao_status_assinatura`/`distribuicao_plano` batem com os Blocos 13-1/13-2, e vêm ordenadas por `total DESC` com desempate alfabético estável entre execuções.
+- **Teste dedicado de fuso horário**: inserir (em ambiente de teste, nunca em produção) uma empresa com `criado_em` correspondente a, por exemplo, `2026-09-30 23:30:00 America/Sao_Paulo` (= `2026-10-01 02:30:00 UTC`) e confirmar que ela aparece em `"2026-09"` na série, não em `"2026-10"` — e o inverso, uma criada logo após a meia-noite de SP no primeiro dia do mês, confirmando que cai no mês novo mesmo que ainda seja o dia anterior em algum outro fuso de referência.
+- Nenhuma chamada de rede além desta RPC; nenhuma coluna de `nome`/`cnpj`/`telefone`/usuário aparece na resposta.
+
+**Rollback proposto** (quando a migração for criada e executada):
+
+```sql
+BEGIN;
+
+DO $$
+BEGIN
+  IF to_regprocedure('public.admin_visao_geral_empresas(integer)') IS NULL THEN
+    RAISE EXCEPTION 'Precheck falhou: admin_visao_geral_empresas(integer) nao encontrada com a assinatura esperada. Abortando sem alterar nada.';
+  END IF;
+END $$;
+
+DROP FUNCTION public.admin_visao_geral_empresas(integer);
+
+SELECT to_regprocedure('public.admin_visao_geral_empresas(integer)') AS funcao_apos_rollback;
+-- Esperado apos este rollback: null.
+
+COMMIT;
+```
+
+Sem risco de perda de dado — a função é puramente `STABLE`/leitura; nenhuma tabela é criada por este incremento, então o rollback é só o `DROP FUNCTION`.
+
+**Estado atual (atualizado em 11/09/2026)**: os dois arquivos abaixo foram **criados como proposta** — texto revisado e estaticamente conferido, **ainda NÃO executados em nenhum banco**:
+- `qa/fase-5/scripts/admin-04-visao-geral-empresas.sql` — migração completa: `BEGIN`, prechecks (tabelas, colunas usadas pela RPC, e confirmação de que a RPC ainda não existe), `CREATE FUNCTION public.admin_visao_geral_empresas`, `OWNER TO postgres`, `REVOKE ALL ... FROM PUBLIC, anon`, `GRANT EXECUTE ... TO authenticated, service_role`, `COMMENT ON FUNCTION`, consultas finais **informativas** somente leitura (existência/assinatura, owner/`SECURITY DEFINER`/volatilidade, `search_path`, privilégios de `EXECUTE` por role), `COMMIT`.
+- `qa/fase-5/scripts/admin-05-rollback-visao-geral-empresas.sql` — rollback: `BEGIN`, precheck que aborta se a função não existir, `DROP FUNCTION` exclusivo dessa RPC, verificação de ausência, `COMMIT`. Não toca em nenhuma tabela ou dado.
+
+**Endurecimento aplicado em `admin-04` (11/09/2026, antes de qualquer execução)**:
+- As consultas finais informativas foram **mantidas exatamente como estavam** (mesma função, mesmo contrato JSON — nenhuma alteração de lógica).
+- Corrigido o comentário da primeira consulta: `pg_get_function_identity_arguments()` retorna só o tipo (`"integer"`, usado para `ALTER`/`DROP FUNCTION`), **não** `"p_meses_serie integer DEFAULT 12"` como o comentário original dizia erradamente. Adicionada uma segunda coluna com `pg_get_function_arguments()`, que é quem de fato mostra nome do parâmetro e `DEFAULT`.
+- **Acrescentado, logo antes do `COMMIT`, um bloco `DO $$ ... $$` de verificação final abortante**: confirma, com `RAISE EXCEPTION` (que desfaz a transação inteira via `ROLLBACK` automático, sem depender de leitura humana das consultas informativas), que a RPC recém-criada tem exatamente: existência com assinatura `(integer)`; `owner = postgres`; `SECURITY DEFINER` ativo; volatilidade `STABLE`; `search_path` configurado como vazio (`proconfig` contém `search_path=`); `authenticated` **com** `EXECUTE`; `anon` **sem** `EXECUTE`; `service_role` **com** `EXECUTE`. Se qualquer uma dessas 8 condições falhar, a migração inteira é revertida automaticamente, mesmo que já tenha chegado ao fim do arquivo.
+
+### Migração `admin-04-visao-geral-empresas.sql` executada com sucesso (11/09/2026)
+
+🟢 **EXECUTADA NO SUPABASE DE PRODUÇÃO, com sucesso — inclusive o bloco `DO $$` de verificação final abortante (que teria desfeito tudo via `ROLLBACK` se qualquer uma das 8 condições rígidas tivesse falhado).** A função `public.admin_visao_geral_empresas(integer)` existe agora no banco real.
+
+**Evidência confirmada pelo usuário** (consulta "Privilégios de EXECUTE" do próprio script):
+- `authenticated_pode_executar` = `true`
+- `anon_pode_executar` = `false`
+- `service_role_pode_executar` = `true`
+
+Bate exatamente com o esperado documentado (`true, false, true`). Como o bloco `DO $$` abortante roda **antes** do `COMMIT` e verifica essas mesmas três condições (junto com existência/assinatura, owner, `SECURITY DEFINER`, volatilidade `STABLE` e `search_path` vazio) — e a migração não foi revertida — as outras 5 condições também foram confirmadas implicitamente pela própria migração, sem precisar de nova consulta manual.
+
+**Nenhum administrador foi cadastrado, nenhuma empresa foi criada/alterada, nenhum dado foi modificado** por esta migração — ela só cria uma função de leitura.
+
+### Como a migração foi de fato aplicada (provenance real, diferente do arquivo original)
+
+🟡 **Correção de registro (11/09/2026)**: a execução **não** foi feita rodando `admin-04-visao-geral-empresas.sql` diretamente. O usuário usou uma consulta corrigida, gerada por outra ferramenta (Codex), em três tentativas:
+
+1. **Tentativa 1** — conteúdo em formato de *diff* (não SQL puro executável direto) — **rejeitada antes de qualquer execução**. Nada rodou, nada foi alterado.
+2. **Tentativa 2** — corpo da função com um nome de variável incorreto (`v_definer`, divergente do declarado) — **rejeitada antes do `COMMIT` e revertida** (a transação não chegou a ser confirmada; nada persistiu).
+3. **Tentativa 3** — corrigida para `v_security_definer` (o nome correto, igual ao que já estava no arquivo original deste incremento) — **executada com sucesso até o `COMMIT`**. É esta a versão realmente em produção hoje.
+
+**Reconciliação do arquivo local com produção**: como o texto executado divergia do arquivo original (mesma lógica, porém com aliases diferentes — `a`→`administrador`, subconsultas renomeadas para `serie`/`totais`/`distribuicao`, `JOIN ... USING` reescrito como `JOIN ... ON`, formatação em várias linhas, e **todos os comentários internos removidos**), o corpo da função dentro de `qa/fase-5/scripts/admin-04-visao-geral-empresas.sql` foi **atualizado para ser cópia exata** do que `pg_get_functiondef()` retornou do objeto real. Confirmado, comparando linha a linha, que a lógica é **100% equivalente** à originalmente revisada e aprovada — mesmos códigos `TRQ61`/`TRQ62`/`TRQ63`, mesmo tratamento de fuso horário (`AT TIME ZONE 'America/Sao_Paulo'` nos dois pontos), mesmo `make_interval`, mesma ordenação determinística, mesmo contrato de 6 chaves no JSON. As explicações que antes estavam como comentário **dentro** da função foram movidas para o cabeçalho do arquivo (fora do corpo), já que o objeto real não as contém. O `COMMENT ON FUNCTION` também foi ajustado para o texto curto que está de fato em produção: *"Indicadores administrativos agregados da Visao Geral do Painel Administrativo Central."*
+
+**Ressalva de precisão**: só o **corpo da função** (via `pg_get_functiondef`) e o **`COMMENT ON FUNCTION`** têm confirmação byte-a-byte do texto realmente executado. Os prechecks, `OWNER`/`REVOKE`/`GRANT` e o bloco `DO $$` de verificação final abortante no arquivo continuam sendo a versão originalmente autorada e revisada — não há prova byte-a-byte de que o texto exato desses trechos foi o mesmo usado pelo Codex, mas o **resultado observado** (grants corretos, função existente, nenhum erro) é consistente com eles terem produzido exatamente esse mesmo estado final.
+
+### Testes funcionais — todos aprovados (11/09/2026)
+
+🟢 Todos os testes preparados na etapa anterior foram executados pelo usuário direto no SQL Editor (via simulação de `request.jwt.claims`, sem alterar nenhum dado) e **aprovados**:
+
+- **A1** (sem sessão → `TRQ61`): ✅
+- **A2** (autenticado, não administrador → `TRQ62`): ✅
+- **A3** (administrador ativo, `p_meses_serie` inválido → `TRQ63`): ✅
+- **B1** (6 chaves de topo no `jsonb`): ✅
+- **B2** (`total_empresas`/`vinculos.*` batem com o diagnóstico real — 10/13/12/1/10): ✅
+- **B3** (`distribuicao_status_assinatura`/`distribuicao_plano` batem com o real): ✅
+- **B4** (tamanho da série respeita `p_meses_serie`, padrão e customizado): ✅
+- **B5** (ordenação determinística entre chamadas sucessivas): ✅
+- **B6** (nenhuma chave sensível no nível de topo do `jsonb`): ✅
+- **C** (fuso horário — mesmo instante escrito em `America/Sao_Paulo` e em UTC cai no mesmo mês de SP): ✅
+
+**Conclusão**: a RPC `admin_visao_geral_empresas(integer)` está em produção, correta, segura e validada — tanto estaticamente (comparação de código) quanto dinamicamente (bateria completa de testes positivos e negativos), sem qualquer alteração de dado real em nenhum momento.
+
+**Próximo passo registrado**: iniciar o frontend do `Torque-Admin` para a tela "Visão Geral" (ainda não iniciado) — ou outro incremento, conforme prioridade do usuário.
+
 ## Checkpoint de 11/09/2026 — Redesenho do Torque-Admin revisado, testado e publicado
 
 🟢 **Redesenho visual e de navegação do Painel Administrativo Central revisado, testado (mockado e real) e publicado separadamente — concluído.**
