@@ -2,9 +2,45 @@
 
 Última atualização: 2026-09-11
 
+## Checkpoint de 11/09/2026 — Teste real do painel aprovado; painel transferido para repositório próprio
+
+🟢 **Teste manual real do Incremento 2.2 aprovado pelo usuário. Painel administrativo transferido do repositório Torque para o repositório público separado `Blast019/torque-admin`** (criação e publicação desse repositório é uma etapa própria, registrada junto com este checkpoint).
+
+**Teste real aprovado pelo usuário** (login manual com a conta administrativa de bootstrap, contra o Supabase de produção, sem nenhuma automação/mock):
+- Login como administrador ativo: **aprovado**.
+- Listagem real das autorizações de onboarding (via `admin_listar_autorizacoes_onboarding`): **aprovada**.
+- Operação real de autorizar/renovar por e-mail (via `admin_autorizar_onboarding`): **aprovada**.
+- Operação real de revogar autorização pendente (via `admin_revogar_autorizacao_onboarding`): **aprovada**.
+- Datas exibidas no painel (`formatarDataHora`) ajustadas para usar explicitamente `timeZone: 'America/Sao_Paulo'` (mantendo locale `pt-BR`, `dateStyle`/`timeStyle` `short`) — confirmado antes do teste real.
+
+**Painel transferido para repositório próprio**: o frontend administrativo, antes em `painel-admin/` dentro deste repositório (Torque), foi movido (copiado com verificação de hash SHA-256 dos quatro arquivos antes de remover a origem, depois removido daqui) para `C:\Users\weverson.silva\Documents\Torque-Admin`, que se tornou o repositório Git público `Blast019/torque-admin`, com o objetivo de publicar `admin.torque.tec.br` separado do sistema usado pelas empresas clientes (`torque.tec.br`). A partir deste checkpoint, `painel-admin/` **não existe mais** neste repositório — o desenvolvimento do painel administrativo continua exclusivamente em `Blast019/torque-admin`. Detalhes de publicação (Pages, DNS, Cloudflare) ficam registrados no repositório novo, não aqui.
+
+## Checkpoint de 11/09/2026 — Incremento 2.1 executado; Incremento 2.2 iniciado
+
+🟢 **Incremento 2.1 EXECUTADO NO SUPABASE. Incremento 2.2 EM ANDAMENTO (frontend mínimo criado localmente, nada publicado).**
+
+**Incremento 2.1 executado**: `qa/fase-5/scripts/admin-01-fundacao-administradores-plataforma.sql` (versão revisada e aprovada — ver seção abaixo) foi executado com sucesso no banco de produção. `public.administradores_plataforma` e as quatro RPCs (`sou_administrador_plataforma`, `admin_listar_autorizacoes_onboarding`, `admin_autorizar_onboarding`, `admin_revogar_autorizacao_onboarding`) estão ativas.
+
+**Bootstrap do primeiro administrador executado** (`admin-03-bootstrap-primeiro-administrador.sql`, procedimento manual — não commitado com nenhum valor real, como já documentado): identidade exclusiva da plataforma, sem nenhum vínculo em `usuarios_empresas`.
+- `administradores_plataforma.id`: `69caf91b-7102-4631-9614-bb47b1f312ab`
+- `user_id` (`auth.users.id`): `8c440421-a211-4a92-9a54-e5c39ddb385a`
+- E-mail: `weversonantonio27+admintorque@gmail.com`
+- `ativo`: `true`
+- `concedido_por`: `null` (nenhum administrador anterior — primeiro bootstrap)
+- `concedido_em`: `2026-09-11 01:11:14.039112+00`
+
+**Defeito encontrado e corrigido antes do Incremento 2.2** (correção do convite sem autorização): o convite `type=invite` dessa própria conta administrativa revelou uma presunção incorreta no handler de "Defina sua senha" em `script.js` — depois de salvar a senha, `tipoFluxoAuthAtual === 'invite'` levava **sempre** direto a "Cadastrar empresa" (`abrirTelaEmpresaAutorizada()`), sem checar `existe_autorizacao_onboarding_pendente()`. Isso presumia que todo convite (incluindo um convite administrativo, sem nenhuma autorização em `autorizacoes_onboarding`) autoriza criar empresa — incorreto. **Corrigido** em `script.js` (handler do botão `definirSenhaSubmitBtn`, ramo `tipoFluxoAuthAtual === 'invite'`): agora consulta `existe_autorizacao_onboarding_pendente()` (mesmo padrão já usado em `iniciarApp()`) e só abre "Cadastrar empresa" se houver autorização pendente; caso contrário, mostra "Sem vínculo". O fluxo já aprovado do usuário `+convitetorque` (convite empresarial, com autorização) é preservado — a checagem sempre retorna `true` para ele. Nenhuma alteração de banco/RPC foi necessária. Validado por teste mockado local (ver "Incremento 2.2" abaixo).
+
+**Incremento 2.2 iniciado** — frontend mínimo do Painel Administrativo Central, ainda **100% local, nada publicado**:
+- **Parte A (correção no Torque atual)**: `script.js` corrigido conforme o defeito acima. Nenhuma alteração em `index.html`, banco ou RPCs.
+- **Parte B (painel administrativo local)**: novo projeto frontend em `painel-admin/` (dentro deste mesmo repositório, por enquanto — sem repositório remoto, sem DNS, sem Cloudflare, sem `CNAME` próprio, conforme decidido). Estrutura simples HTML/CSS/JS, sem framework/build, compatível com GitHub Pages, reusando a mesma URL pública e a mesma anon key do Supabase já usadas pelo site principal (nunca `service_role`). Implementa: login; verificação exclusiva via `sou_administrador_plataforma()` (bloqueio + logout automático para quem não é administrador ativo); listagem via `admin_listar_autorizacoes_onboarding()` com filtros (pendente/consumida/expirada/revogada/todas); formulário de autorizar/renovar por e-mail (72 horas, `admin_autorizar_onboarding()`); revogação com confirmação (`admin_revogar_autorizacao_onboarding()`); aviso fixo de que o envio do convite continua manual pelo Supabase até o Incremento 2.3; layout responsivo; nenhum link ou acesso a dado operacional de empresa cliente.
+- **Arquivos criados**: `painel-admin/index.html`, `painel-admin/style.css`, `painel-admin/script.js`, `painel-admin/config.js`.
+- **Validação**: `node --check` sem erros em `script.js` (site principal) e em `painel-admin/script.js`. Testes locais mockados (Playwright + stub de `supabase-js`, sem nenhuma chamada real ao Supabase) cobrindo: convite empresarial com autorização (→ Cadastrar empresa, preservado); convite administrativo sem autorização (→ Sem vínculo, defeito corrigido); administrador ativo (→ painel); usuário autenticado não administrador (→ bloqueio + logout); listagem e os quatro filtros; autorizar (criação) e autorizar de novo o mesmo e-mail (renovação idempotente); revogação (com confirmação). Todos os cenários passaram.
+- **Pendente para publicar** (fora do escopo desta etapa, decisões represadas para o momento da publicação): criar o repositório remoto para `painel-admin/` (ou decidir manter no mesmo repositório do site principal, com publicação separada), configurar DNS/Cloudflare para `admin.torque.tec.br`, e só então criar o `CNAME` desse novo site — nada disso foi feito aqui.
+
 ## Checkpoint de 11/09/2026 — Início do Incremento 2.1: fundação de administradores da plataforma
 
-🟡 **EM ANDAMENTO (proposta de migração criada, nada executado).** Após a conclusão e publicação do Incremento 1, o usuário aprovou o próximo passo do Painel Administrativo Central: eliminar o procedimento manual de autorização de onboarding hoje feito pelo SQL Editor/Authentication do Supabase, substituindo-o por um painel próprio. Esse trabalho foi dividido em três incrementos:
+🟢 **EXECUTADO NO SUPABASE em 11/09/2026** (ver checkpoint acima). Descrição original da proposta, mantida como registro histórico: Após a conclusão e publicação do Incremento 1, o usuário aprovou o próximo passo do Painel Administrativo Central: eliminar o procedimento manual de autorização de onboarding hoje feito pelo SQL Editor/Authentication do Supabase, substituindo-o por um painel próprio. Esse trabalho foi dividido em três incrementos:
 
 - **Incremento 2.1** (este) — fundação no banco: tabela de administradores da plataforma e RPCs de gestão de autorizações. **Sem frontend, sem administrador cadastrado, sem execução no Supabase.**
 - **Incremento 2.2** — frontend do painel e hospedagem em `admin.torque.tec.br` (exige um segundo repositório/site do GitHub Pages e um novo registro DNS no Cloudflare, já que o GitHub Pages não hospeda dois domínios personalizados a partir do mesmo repositório) — fica para depois deste incremento.

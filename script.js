@@ -138,8 +138,36 @@ document.getElementById('definirSenhaSubmitBtn').addEventListener('click', async
 
     if(tipoFluxoAuthAtual === 'invite'){
       const { data: userData } = await sb.auth.getUser();
-      usuarioIdAtual = (userData && userData.user) ? userData.user.id : null;
-      abrirTelaEmpresaAutorizada();
+      const user = (userData && userData.user) ? userData.user : null;
+      usuarioIdAtual = user ? user.id : null;
+
+      // Correção (11/09/2026): type=invite nunca autoriza criar empresa por
+      // si só — um convite type=invite também é usado para contas
+      // administrativas da plataforma (Incremento 2.1), que não têm (e não
+      // devem ter) nenhuma autorização em autorizacoes_onboarding. A
+      // condição real é sempre existe_autorizacao_onboarding_pendente(),
+      // nunca o tipo de convite sozinho — mesmo padrão já usado em
+      // iniciarApp() para o boot com sessão existente.
+      const metadata = (user && user.user_metadata) || {};
+      const pendente = metadata.pending_empresa === true;
+
+      let autorizado = false;
+      try{
+        const { data: autorizadoRpc } = await sb.rpc('existe_autorizacao_onboarding_pendente');
+        autorizado = autorizadoRpc === true;
+      } catch(erroAutorizacao){
+        autorizado = false;
+      }
+
+      if(autorizado){
+        abrirTelaEmpresaAutorizada(pendente ? metadata : null);
+      } else {
+        mostrarEstadoContexto({
+          titulo: 'Sem vínculo',
+          mensagem: 'Sua conta não está associada a nenhuma empresa no momento.',
+          acoes: [{ label: 'Sair', onClick: sairDaConta }]
+        });
+      }
     } else {
       // Recuperação de senha: a pessoa acabou de definir/confirmar uma
       // senha real neste formulário — viaLoginForm=true evita uma volta
