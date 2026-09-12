@@ -2,6 +2,62 @@
 
 Última atualização: 2026-09-11
 
+## Checkpoint de 11/09/2026 — Incremento 3.1 concluído (banco + frontend) e publicado em produção
+
+🟢 **INCREMENTO 3.1 CONCLUÍDO E PUBLICADO EM PRODUÇÃO — banco e frontend.** Este checkpoint consolida a conclusão de todo o Incremento 3.1 (Visão Geral do Painel Administrativo Central), cujas etapas de desenho, execução e testes já estão detalhadas nos checkpoints abaixo. Registrado aqui, no topo, como fechamento oficial.
+
+**Banco (repositório `Blast019/torque`)**:
+- Commit `92f94dd` — `feat(admin): criar RPC agregada da visao geral`.
+- RPC `public.admin_visao_geral_empresas(integer)` executada com sucesso no Supabase de produção (ver checkpoint "Migração `admin-04-visao-geral-empresas.sql` executada com sucesso" abaixo para a evidência completa e a proveniência real da execução).
+- Bateria completa de testes aprovada: casos positivos, negativos (`TRQ61`/`TRQ62`/`TRQ63`), permissões por role (`authenticated`/`anon`/`service_role`) e teste dedicado de fuso horário (`America/Sao_Paulo`) — todos ✅ (ver seção "Testes funcionais — todos aprovados" abaixo).
+
+**Frontend (repositório separado `Blast019/torque-admin`, domínio `admin.torque.tec.br`)**:
+- Commit publicado: `9954135` — `feat(painel): implementar visao geral e redesenhar autorizacoes`.
+- Hash completo: `99541353c43cda8ada906092379f2a6aceced538`.
+- Arquivos alterados: somente `index.html`, `script.js`, `style.css` — `CNAME` e `config.js` do `Torque-Admin` permaneceram intocados em toda a etapa.
+- Push fast-forward, sem `--force`, sem alteração de histórico.
+- Telas concluídas: **"Visão Geral"** (tela inicial pós-login, chamada única a `admin_visao_geral_empresas({p_meses_serie:12})` por sessão, 4 indicadores reais, gráfico de novas empresas por mês, distribuição de status de assinatura e de plano em gráficos de rosca, seção "Próximos indicadores" sem nenhum valor fictício) e **"Autorizações de acesso"** (redesenho completo da antiga tela de Onboarding, mesma identidade visual).
+- **Nomenclatura visível corrigida**: toda referência visível ao termo técnico "Onboarding" foi substituída por "Autorizações"/"Autorizações de acesso" (menu, título da página, subtítulo, título do formulário, título da listagem, badges de situação — "Consumida" também virou "Utilizada"). Nomes internos (IDs, funções JavaScript, nomes de RPC como `admin_listar_autorizacoes_onboarding`) foram **preservados de propósito**, sem renomeação, para não gerar regressão — a mudança foi só nos textos exibidos ao usuário.
+- **Testes aprovados**: suíte funcional completa (mockada, cobrindo os dois telas, filtros, estados de erro/retry, proteção contra clique duplo, divisão por zero/NaN nas distribuições), testes de responsividade em 1920×1080, 1366×768 e 390×844 (sem rolagem horizontal em nenhum tamanho, navegação lateral no desktop e navegação horizontal preservada no celular), e **smoke test manual real em produção** (`https://admin.torque.tec.br`) aprovado pelo usuário: login administrativo, Visão Geral com dados reais, navegação para Autorizações, histórico real carregando, botão "Sair" visível — sem nenhuma autorização criada/renovada/revogada durante o teste.
+
+**Identidade visual**: o novo design (fundo azul-preto profundo, laranja como cor de destaque, cards com ícone em caixa translúcida, gráficos de barra e rosca em HTML/CSS puro, sem biblioteca externa) foi **aprovado como referência visual do Painel Administrativo Central** e também **como referência para o futuro redesenho do projeto principal Torque** (o sistema usado pelas empresas clientes, hoje com identidade visual diferente). **Decisão registrada**: esse redesenho do Torque principal será feito **futuramente, tela por tela**, cada uma com seu próprio ciclo de testes e publicação separados — não é um retrabalho único de todo o sistema de uma vez, e não está agendado como parte do Incremento 3.1 nem do próximo incremento.
+
+**Restrição confirmada nesta entrega**: a Visão Geral administrativa **não exibe, e nunca deve exibir, nenhum indicador operacional interno das empresas clientes** — quantidade de funcionários, veículos, barbeiros ou qualquer outro tipo de colaborador/recurso interno de um estabelecimento não pertence a este painel, mesmo de forma agregada. Isso reforça a "Restrição fundamental" já registrada nesta fase (ver seção correspondente abaixo): os únicos indicadores administrativos agregados hoje na tela são total de empresas, novas empresas no mês, empresas ativas e empresas no plano Teste — todos relativos à relação Torque↔estabelecimento, nunca ao funcionamento interno do estabelecimento.
+
+**Indicadores futuros já previstos (seção "Próximos indicadores" da tela, hoje sem nenhum número, só descrição do que virá)**: valor recebido, valores pendentes/inadimplência, mensagens enviadas e custo das mensagens — todos dependentes de módulos ainda não implementados (financeiro/assinaturas e mensagens), sem nenhuma data fictícia exibida até que esses módulos existam de fato.
+
+### Próximo incremento identificado — análise, nada implementado
+
+🔵 **ANÁLISE DE PLANEJAMENTO. Nenhuma tabela criada, nenhum SQL executado, nenhum arquivo do painel alterado nesta etapa.**
+
+Pela "Ordem de trabalho registrada" no checkpoint "Planejamento revisado do Incremento 3" (mais abaixo neste mesmo documento), a sequência aprovada após o Incremento 3.1 é: **Incremento 3.2 — Catálogo e histórico de preços dos planos**, seguido por 3.5 (Despesas), depois 3.3/3.4 (Assinaturas), 3.6 (Rateio), 3.7 (Fechamento mensal) e 3.8 (Métricas de WhatsApp, condicionado à Fase 7). Essa ordem já foi aprovada anteriormente e não foi alterada aqui — nenhuma numeração nova foi inventada.
+
+**Nenhuma contradição encontrada** entre essa ordem e o restante do planejamento: as sub-fases 5.1 (restrição de acesso), 5.3 (URL personalizada) e 5.4 (Central de Avisos) continuam registradas como requisitos pendentes, mas não fazem parte da fila de execução imediata definida nessa "Ordem de trabalho registrada" — não é uma contradição, é uma priorização já explícita no documento (o detalhamento técnico de "Incremento 3" foi a decisão de focar primeiro em 5.2/Operação e Financeiro + o dashboard, deixando 5.1/5.3/5.4 para depois, sem data definida).
+
+**Objetivo do Incremento 3.2**: criar o catálogo de planos (`planos`) e o histórico de preços (`planos_historico_precos`) da própria Torque — nome, periodicidade, período de teste, limites, descontos e recursos de cada plano, com histórico de mudanças de preço preservado (nunca sobrescrito). É pré-requisito estrutural do Incremento 3.3/3.4 (Assinaturas), cujo modelo já aprovado (`assinaturas.plano_id`) pressupõe a existência desse catálogo.
+
+**Dependências**:
+- Nenhuma dependência de dado real além do que já foi confirmado no diagnóstico do Incremento 3.1 (schema de `empresas` já conhecido).
+- Depende de uma decisão de negócio ainda **não tomada e explicitamente registrada como pendente** na seção 5.2: como uma mudança de preço afeta assinaturas já existentes (aplicação imediata, só em renovações futuras, ou regra de transição) — isso precisa ser decidido antes de fechar o desenho de `planos_historico_precos`, pois afeta diretamente sua estrutura (campo de vigência, estratégia de aplicação).
+- Decisão de reconciliação ainda em aberto: hoje `empresas.plano` é texto livre (`'Teste'` etc., sem `CHECK`, confirmado no diagnóstico real do Incremento 3.1). É preciso decidir se o Incremento 3.2 já migra/relaciona esse campo ao novo catálogo normalizado, ou se mantém os dois coexistindo temporariamente até o Incremento 3.3/3.4 (quando `assinaturas.plano_id` for de fato criado e passar a ser a fonte de verdade).
+
+**Dados necessários antes de desenhar a migração**: nenhuma nova consulta de diagnóstico ao banco é estritamente necessária (diferente do 3.1, que dependeu de confirmar colunas desconhecidas) — mas convém, ao iniciar, reconferir os valores reais hoje presentes em `empresas.plano` (o diagnóstico do 3.1 já indicou 100% das empresas em `'Teste'` na data da consulta) para garantir que o desenho do catálogo cobre pelo menos os valores realmente em uso.
+
+**Riscos identificados**:
+- Reconciliar o texto livre existente (`empresas.plano`) com um catálogo normalizado pode expor inconsistências de grafia/capitalização se novos valores tiverem sido gravados fora do padrão desde o diagnóstico do 3.1.
+- Risco de escopo: desenhar `planos_historico_precos` sem a decisão pendente sobre efeito de mudança de preço pode gerar retrabalho estrutural quando o Incremento 3.3/3.4 (Assinaturas) precisar consumir esse histórico.
+- Mesmo princípio de segurança já aplicado no 3.1 (RPCs `SECURITY DEFINER`, `search_path` vazio, gated por `administradores_plataforma`) precisa se repetir aqui — nenhum dado de plano deve ficar gravável diretamente por `anon`/`authenticated`.
+
+**Ordem sugerida** (dentro do próprio Incremento 3.2, ainda não iniciado):
+1. Confirmar/decidir a política de efeito de mudança de preço (pendência de negócio acima) — sem isso, não desenhar a tabela.
+2. Desenhar `planos` + `planos_historico_precos` (aditivo — sem alterar `empresas` nem nenhuma tabela existente nesta etapa).
+3. Desenhar as RPCs administrativas de CRUD de planos (criar/editar/ativar/desativar plano; registrar novo preço no histórico).
+4. Testes mockados + reais, mesmo padrão rigoroso do Incremento 3.1 (positivos, negativos, permissões).
+5. Frontend: nova tela "Planos" no `Torque-Admin` (item já existe no menu lateral, hoje marcado "Em breve").
+6. Publicação separada, com smoke test real, mesmo fluxo usado para o Incremento 3.1.
+
+Este incremento **não foi implementado** nesta etapa — só identificado e descrito, aguardando decisão do usuário para prosseguir.
+
 ## Checkpoint de 11/09/2026 — Incremento 3.1: diagnóstico real confirmado e desenho técnico da RPC de Visão Geral
 
 🔵 **INVESTIGAÇÃO CONCLUÍDA E DESENHO TÉCNICO PROPOSTO. Nada executado, nada implementado, nenhum arquivo de migração criado ainda.**
