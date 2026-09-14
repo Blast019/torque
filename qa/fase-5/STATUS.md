@@ -2,6 +2,133 @@
 
 Última atualização: 2026-09-14
 
+## Checkpoint de 14/09/2026 — Incremento 3.2: admin-08 e admin-09 executados com sucesso (histórico de preços criado, plano "Teste" normalizado semeado)
+
+🟢 **admin-08 E admin-09 EXECUTADOS COM SUCESSO EM PRODUÇÃO, VALIDADOS POR CONSULTA INDEPENDENTE AO CATÁLOGO.** Este checkpoint registra a execução real dos dois scripts de estrutura/seed preparados no checkpoint "Incremento 3.2: desenho do histórico de preços e instalação da extensão btree_gist confirmada" (logo abaixo) — a partir de agora, a afirmação "NENHUM EXECUTADO" daquele checkpoint vale apenas para `admin-10` e `admin-11`, que continuam preparados e **não executados**, por serem rollbacks de emergência.
+
+### Extensão `btree_gist`
+
+Confirmada instalada (`extname=btree_gist`, `extversion=1.7`) desde o checkpoint anterior — o precheck fail-closed do `admin-08` reconfirmou isso ao vivo no momento da execução (não apenas presumiu do diagnóstico anterior) e passou.
+
+### Execução
+
+Ambos rodados manualmente pelo usuário no SQL Editor do Supabase em 14/09/2026, `admin-09` imediatamente após a conclusão bem-sucedida do `admin-08`:
+
+| Script | Resultado |
+|---|---|
+| `admin-08-estrutura-historico-precos-planos.sql` | `Success. No rows returned` — nenhum `RAISE EXCEPTION` disparado (precheck e verificação final fail-closed passaram) |
+| `admin-09-seed-plano-teste.sql` | `Success. No rows returned` — nenhum `RAISE EXCEPTION` disparado (precheck, inserção e verificação final de sincronização passaram) |
+
+### Validação independente do seed (consulta separada ao catálogo, não os `DO $$` dos scripts)
+
+| Campo | Valor |
+|---|---|
+| `plano_id` | `ec0b63f7-0fde-43ff-8806-07a489e8dfdb` |
+| `nome` | `Teste` |
+| `descricao` | `Plano de avaliacao gratuito` |
+| `preco` | `0` |
+| `moeda` | `BRL` |
+| `ativo` | `true` |
+| `total_historicos` | `1` |
+| `historico_id` | `d7318771-01f2-4757-84f6-9ebd0b32c593` |
+| `historico_preco` | `0` |
+| `historico_moeda` | `BRL` |
+| `vigente_desde` | `2026-09-14 20:11:56.318565+00` |
+| `vigente_ate` | `null` |
+| `motivo` | `cadastro inicial do catalogo normalizado` |
+| `registrado_por` | `null` |
+| `cache_sincronizado` | `true` |
+
+Confirma exatamente o desenho aprovado: `public.planos_historico_precos` criada com a exclusion constraint GiST e o índice único parcial em vigor (sem sobreposição possível), plano "Teste" gratuito com uma única vigência inicial aberta, e `planos.preco`/`planos.moeda` (cache) sincronizados com o histórico vigente.
+
+### Estado real após esta etapa
+
+- Plano "Teste" normalizado **criado com sucesso** em `public.planos`, com seu histórico inicial de preço criado e sincronizado em `public.planos_historico_precos`.
+- `empresas.plano` **ainda não foi migrada** — continua com o valor de texto livre pré-existente, intocada por `admin-08`/`admin-09`.
+- **Nenhuma empresa** foi associada ao plano "Teste" normalizado ainda.
+- **Nenhuma tabela `public.assinaturas` existe** e **nenhuma assinatura** foi criada ou associada a este plano.
+- `admin-10` e `admin-11` continuam **preparados e não executados** — são os rollbacks de emergência deste incremento (do seed e da estrutura, respectivamente) e só devem ser rodados se for necessário reverter.
+
+### Próximos passos reais do Incremento 3.2
+
+- Associar as empresas existentes ao plano "Teste" normalizado (ainda não feito).
+- Desenhar e criar as RPCs administrativas de CRUD de planos (a disciplina transacional de sincronização cache↔histórico, hoje só documentada, ainda não existe como RPC).
+- Frontend (`Torque-Admin`) da tela "Planos".
+- Migrar `empresas.plano` do texto livre atual para referenciar `public.planos` (ainda não iniciado, ainda não planejado em detalhe).
+- Incremento 3.3/3.4 (Assinaturas) — inclusive a reavaliação já registrada do modelo de preço contratado para promoções/descontos/valores negociados.
+
+## Checkpoint de 14/09/2026 — Incremento 3.2: desenho do histórico de preços e instalação da extensão btree_gist confirmada
+
+🔵 **DESENHO TÉCNICO E PREPARAÇÃO DE SCRIPTS. Nenhum dos quatro scripts abaixo foi executado.** Este checkpoint registra o desenho revisado do catálogo normalizado de planos (parte final pendente do Incremento 3.2, ver "Pendente" no checkpoint anterior) e a instalação manual, já confirmada, da extensão `btree_gist` — pré-requisito para a integridade temporal do histórico de preços.
+
+### Extensão `btree_gist` — instalada manualmente e confirmada
+
+O usuário instalou manualmente a extensão `btree_gist` no banco de produção (fora de qualquer script deste projeto) e confirmou por consulta direta ao catálogo:
+
+| `extname` | `extversion` |
+|---|---|
+| `btree_gist` | `1.7` |
+
+**`btree_gist` não pertence a nenhum rollback deste incremento** — nenhum script (`admin-08` a `admin-11`) cria nem remove essa extensão; eles só a **confirmam instalada** (fail-closed, aborta se não estiver) antes de usá-la. A extensão é necessária porque uma *exclusion constraint* `EXCLUDE USING gist` combinando uma coluna `uuid` (`plano_id WITH =`) com um `tstzrange` (`WITH &&`) exige o operador de igualdade para `uuid` disponível em índice GiST — só fornecido pelo `btree_gist`.
+
+### Decisões de negócio aprovadas para o plano "Teste" (complementam o checkpoint "Incremento 3.2: duas decisões de negócio aprovadas")
+
+- Plano **gratuito**, preço inicial **0,00**, moeda **BRL**.
+- Vigência inicial = `now()` no momento da execução do `admin-09` (sem data retroativa).
+- **Periodicidade fica para o Incremento 3.3/3.4** — não é adicionada a `planos` nesta etapa.
+
+### Desenho técnico — `public.planos` (alteração) e `public.planos_historico_precos` (nova)
+
+**`public.planos`** ganha, além das 6 colunas já existentes (criadas pelo `admin-07`):
+- `moeda text NOT NULL DEFAULT 'BRL'`.
+- `CHECK (moeda = 'BRL')` (`planos_moeda_suportada`) — validação estreita e honesta ao escopo atual (só BRL existe de fato hoje), não uma regex ISO-4217 genérica que sugeriria suporte multi-moeda inexistente.
+- `CHECK (preco >= 0)` (`planos_preco_nao_negativo`).
+
+**`public.planos_historico_precos`** (nova, ledger append-only de vigências de preço por plano):
+
+| Coluna | Tipo | Nulo? | Observação |
+|---|---|---|---|
+| `id` | uuid | não | PK, `default gen_random_uuid()` |
+| `plano_id` | uuid | não | FK → `planos(id)` |
+| `preco` | numeric | não | `CHECK (preco >= 0)` |
+| `moeda` | text | não | `default 'BRL'`, `CHECK (moeda = 'BRL')` |
+| `vigente_desde` | timestamptz | não | sem default — sempre informado explicitamente por quem escreve |
+| `vigente_ate` | timestamptz | sim | `NULL` = vigência atual |
+| `motivo` | text | sim | ex.: "cadastro inicial do catalogo normalizado" |
+| `registrado_por` | uuid | sim | FK → `auth.users(id)` **`ON DELETE SET NULL`** |
+| `criado_em` | timestamptz | não | `default now()` |
+
+**Integridade temporal (dupla camada)**:
+1. Índice único parcial `planos_historico_precos_vigente_unico` em `(plano_id) WHERE vigente_ate IS NULL` — no máximo uma vigência aberta por plano.
+2. *Exclusion constraint* `planos_historico_precos_sem_sobreposicao`, via GiST (`btree_gist`), impedindo sobreposição de intervalos `[vigente_desde, coalesce(vigente_ate, 'infinity'))` para o mesmo `plano_id` — cobre inclusive vigências já fechadas, caso que o índice único (1) não cobre sozinho.
+
+**Segurança**: `ENABLE ROW LEVEL SECURITY` sem `FORCE` (mesmo desenho já aprovado no `admin-07`), zero políticas, `REVOKE ALL FROM PUBLIC, anon, authenticated`, owner `postgres`.
+
+**Sincronização cache ↔ histórico**: `planos.preco`/`planos.moeda` são cache do par vigente atual — mesmo papel de `assinaturas.plano_id`/`situacao` como "cache do estado corrente" na Correção 1. A garantia não é uma constraint declarativa entre tabelas (Postgres não permite `CHECK` cruzando tabelas) — é uma disciplina transacional de escrita: qualquer futura escrita deve, na mesma transação, fechar a vigência anterior, abrir a nova, e atualizar o cache em `planos` para bater exatamente com ela.
+
+**Ressalva registrada explicitamente (vale para toda RPC futura de assinaturas)**: este modelo de preço "contratado" (derivado por casamento temporal entre `assinaturas_historico.vigente_desde` e a vigência em `planos_historico_precos`) é um modelo simples de **preço de tabela histórico** — não suporta ainda promoções, descontos ou valores individualmente negociados por assinatura. Isso será reavaliado explicitamente no **Incremento 3.3/3.4**. Nenhuma assinatura real deve depender apenas desta associação temporal para determinar o valor cobrado, sem essa revisão acontecer antes.
+
+### Scripts preparados — NENHUM EXECUTADO
+
+| Script | Papel |
+|---|---|
+| `qa/fase-5/scripts/admin-08-estrutura-historico-precos-planos.sql` | Estrutura: altera `planos` (moeda + CHECKs) e cria `planos_historico_precos` completa (constraints, índices, exclusion constraint, RLS, grants). Confirma `btree_gist` instalada (fail-closed) — nunca executa `CREATE EXTENSION`. |
+| `qa/fase-5/scripts/admin-09-seed-plano-teste.sql` | Seed idempotente: insere o plano "Teste" (gratuito, BRL) e sua primeira vigência, na mesma transação. Replay seguro — aborta em vez de sobrescrever se o estado existente divergir do esperado. |
+| `qa/fase-5/scripts/admin-10-rollback-seed-plano-teste.sql` | Reverte **somente** o `admin-09`: remove o histórico antes do plano, detecta referências futuras (`assinaturas`, quando existir) antes de excluir, sem `CASCADE`. |
+| `qa/fase-5/scripts/admin-11-rollback-estrutura-historico-precos-planos.sql` | Reverte **somente** o `admin-08`: exige `planos_historico_precos` vazia, `DROP TABLE` sem `CASCADE`, remove só a coluna/constraints que o `admin-08` adicionou em `planos`. Nunca remove `btree_gist`. |
+
+Todos os quatro seguem o mesmo padrão de rigor já usado em `admin-06`/`admin-07`: precheck fail-closed reconfirmando o estado exato no momento da execução, verificação final fail-closed depois da alteração, e mensagens de erro específicas por condição — nenhum `ON CONFLICT DO NOTHING` silencioso em nenhum dos quatro.
+
+**Confirmado explicitamente nesta etapa**: `empresas.plano` permanece intocada (nenhuma coluna, constraint ou dado alterado); nenhuma tabela `public.assinaturas` existe ainda e nenhuma assinatura é criada ou alterada por nenhum dos quatro scripts.
+
+### Pendente (nada disto foi implementado nesta etapa)
+
+- Executar `admin-08` e `admin-09` (aguardando autorização).
+- Associar as empresas atuais ao plano "Teste" normalizado.
+- Desenhar e criar as RPCs administrativas de CRUD de planos (a via de escrita disciplinada mencionada acima ainda não existe como RPC — hoje só existe como regra registrada).
+- Frontend (`Torque-Admin`) da tela "Planos".
+- Incremento 3.3/3.4 (Assinaturas) — inclusive a revisão do modelo de preço contratado para promoções/descontos/valores negociados.
+
 ## Checkpoint de 14/09/2026 — Incremento 3.2: admin-06 e admin-07 executados com sucesso (tabela inesperada removida, placeholder seguro recriado)
 
 🟢 **admin-06 E admin-07 EXECUTADOS COM SUCESSO EM PRODUÇÃO, VALIDADOS POR CONSULTA INDEPENDENTE AO CATÁLOGO.** Este checkpoint registra a execução real dos dois scripts aprovados no checkpoint "Incremento 3.2: duas decisões de negócio aprovadas" (mais abaixo). **Não** inicia nem conclui o desenho definitivo do catálogo de planos do Incremento 3.2 em si — ver "Pendente" no final desta seção.
