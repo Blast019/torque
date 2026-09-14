@@ -1,6 +1,106 @@
 # Fase 5 — SaaS / Administração
 
-Última atualização: 2026-09-11
+Última atualização: 2026-09-14
+
+## Checkpoint de 14/09/2026 — Incremento 3.2: admin-06 e admin-07 executados com sucesso (tabela inesperada removida, placeholder seguro recriado)
+
+🟢 **admin-06 E admin-07 EXECUTADOS COM SUCESSO EM PRODUÇÃO, VALIDADOS POR CONSULTA INDEPENDENTE AO CATÁLOGO.** Este checkpoint registra a execução real dos dois scripts aprovados no checkpoint "Incremento 3.2: duas decisões de negócio aprovadas" (mais abaixo). **Não** inicia nem conclui o desenho definitivo do catálogo de planos do Incremento 3.2 em si — ver "Pendente" no final desta seção.
+
+### admin-06 — remoção da tabela `public.planos` inesperada
+
+- `qa/fase-5/scripts/admin-06-remover-tabela-planos-inesperada.sql` executado manualmente no SQL Editor do Supabase pelo usuário em 14/09/2026.
+- Resultado: **Success** (sem nenhum `RAISE EXCEPTION`) — todos os 10 prechecks (relkind='r', 6 colunas exatas por nome/tipo/nulabilidade/default, 2 constraints com definição exata via `pg_get_constraintdef`, zero linhas, zero triggers, RLS habilitado, zero políticas, zero views/matviews dependentes via `pg_depend`, zero FKs de outras tabelas apontando para ela) passaram, o `LOCK TABLE ... IN ACCESS EXCLUSIVE MODE` foi obtido, o `DROP TABLE public.planos` foi executado, e a transação chegou ao `COMMIT`.
+- **A tabela `public.planos` original — proveniência desconhecida, RLS habilitado sem nenhuma política combinado com `GRANT` direto de CRUD completo para `anon`/`authenticated` (ver checkpoint anterior "Incremento 3.2: duas decisões de negócio aprovadas") — foi removida.**
+
+### admin-07 — recriação segura de `public.planos`
+
+- `qa/fase-5/scripts/admin-07-recuperacao-segura-tabela-planos.sql` executado manualmente no SQL Editor do Supabase pelo usuário, imediatamente após a conclusão do admin-06, em 14/09/2026.
+- Resultado: **Success** (sem nenhum `RAISE EXCEPTION`) — a tabela foi recriada (mesma estrutura de colunas/constraints do original), RLS habilitado, owner definido como `postgres`, `REVOKE ALL` executado contra `PUBLIC`/`anon`/`authenticated`, e a auditoria fail-closed de ACL (via `pg_class.relacl` + `aclexplode`, com resolução obrigatória — e abortante se ausente — dos OIDs reais de `anon`/`authenticated` antes de auditar, sem filtro fechado de tipo de privilégio) não encontrou nenhum privilégio para `PUBLIC`/`anon`/`authenticated`, de nenhum tipo.
+
+### Validação final — consulta independente ao catálogo
+
+Depois dos dois scripts, o usuário executou uma consulta somente leitura adicional, **independente** dos dois scripts, direto contra o catálogo do Postgres, para confirmar o estado real da tabela recriada. Resultado retornado:
+
+| Verificação | Resultado |
+|---|---|
+| `tabela_comum_ok` (relkind = 'r') | `true` |
+| `total_linhas` | `0` |
+| `rls_habilitado` | `true` |
+| `rls_forcado` | `false` |
+| `total_policies` | `0` |
+| `role_anon_existe` | `true` |
+| `role_authenticated_existe` | `true` |
+| `privilegios_public_anon_authenticated` | `0` |
+
+**`rls_forcado = false` é o desenho aprovado, não uma pendência**: nenhum dos dois scripts inclui `FORCE ROW LEVEL SECURITY`. O owner da tabela é `postgres`, que ignora RLS de qualquer forma (forçado ou não); como não há nenhuma política e os grants de `PUBLIC`/`anon`/`authenticated` foram revogados, o acesso já fica bloqueado independentemente de `FORCE`. Uma garantia formal de RLS forçado, se um dia for desejada, é uma migração nova e separada — fora do escopo do que foi aprovado e executado aqui.
+
+**Resultado: execução e validação final aprovadas pelo usuário.**
+
+### Estado real de `public.planos` após esta etapa
+
+`public.planos` existe hoje só como uma tabela **placeholder mínima e segura** (`id`, `nome`, `descricao`, `preco`, `ativo`, `criado_em`, com PK em `id` e UNIQUE em `nome`, RLS habilitado, zero políticas, zero grants para `anon`/`authenticated`) — **ainda não é o catálogo definitivo do Incremento 3.2**. Nenhuma linha foi inserida, inclusive **nenhum plano "Teste" ainda** — a Decisão 2 já aprovada (ver checkpoint "Incremento 3.2: duas decisões de negócio aprovadas") continua sem implementação.
+
+### Pendente (nada disto foi iniciado nesta etapa)
+
+- Inserir o plano "Teste" no catálogo (Decisão 2, já aprovada).
+- Criar `planos_historico_precos`.
+- Desenhar e criar as RPCs administrativas de CRUD de planos.
+- Associar as empresas atuais ao plano "Teste" normalizado.
+- Frontend (`Torque-Admin`) da tela "Planos".
+- Testes mockados + reais do catálogo definitivo, mesmo padrão rigoroso já usado no Incremento 3.1.
+
+Este checkpoint documenta exclusivamente a remoção da tabela inesperada e a recriação segura de um placeholder vazio — nenhuma etapa futura do Incremento 3.2 está concluída.
+
+## Checkpoint de 12/09/2026 — Decisão provisória de cobrança em nome de pessoa física (CPF) e requisitos jurídicos/fiscais antes da formalização
+
+🟡 **DECISÃO DE NEGÓCIO PROVISÓRIA REGISTRADA. Nenhuma cobrança real foi feita ainda. Nenhuma implementação de checkout, contrato ou fluxo de pagamento foi iniciada nesta etapa.** Este checkpoint documenta uma decisão temporária de como a Torque vai operar comercialmente enquanto ainda não existe pessoa jurídica (CNPJ) nem contador contratado — e os requisitos que precisam ser validados antes da primeira cobrança real e antes de qualquer crescimento de escala. Não substitui nem contradiz o modelo financeiro já registrado no checkpoint "Planejamento revisado do Incremento 3" (Correções 1-4) — é uma camada de conformidade jurídica/fiscal sobre aquele modelo, a ser respeitada quando ele for implementado.
+
+**Decisão provisória de titularidade da cobrança**:
+- Inicialmente, a cobrança das assinaturas do Torque será recebida **em nome de Weverson Silva, usando CPF**, enquanto o negócio estiver em fase de validação e ainda não possuir CNPJ nem contador.
+- A referência de **100 clientes pagantes é somente uma meta interna para acionar a formalização** — não é uma autorização legal, nem um limite que por si só torna a operação regular até ser atingido.
+- **Reavaliação obrigatória antes de chegar a essa meta**, sempre que o volume, o faturamento, a habitualidade da operação, uma exigência de cliente, da prefeitura, de um banco, de uma adquirente ou de um gateway de pagamento tornar necessária a formalização mais cedo — a meta de 100 é um teto de referência, nunca um piso que autoriza esperar até lá.
+
+**Antes da primeira cobrança real** (bloqueante — não deve ser feita nenhuma cobrança de assinatura antes disto):
+- Validar junto à **Prefeitura de Uberlândia**: cadastro como prestador de serviço autônomo, incidência de ISS sobre o serviço prestado, e a forma correta de emissão de documento fiscal (NFS-e de autônomo ou nota fiscal avulsa, conforme o que o município exigir).
+
+**Escrituração e separação de recebimentos**:
+- Recebimentos de pessoas físicas e de pessoas jurídicas devem ser **separados e escriturados**, mantendo, para cada um: identificação do cliente, competência, valor, desconto, estorno, meio de pagamento e comprovante — consistente com o mesmo rigor de auditoria já exigido para `pagamentos` no modelo financeiro (Correção 1, ver checkpoint "Planejamento revisado do Incremento 3").
+- Avaliar a incidência de **IRPF/Carnê-Leão** conforme a origem de cada pagamento e as regras vigentes no momento.
+
+**Clientes pessoa jurídica**:
+- Um cliente pessoa jurídica poderá exigir documento fiscal. Quando juridicamente aplicável, a própria empresa contratante/tomadora poderá emitir RPA pelo pagamento realizado à pessoa física e efetuar as retenções tributárias e previdenciárias cabíveis. O RPA não deve ser tratado como documento emitido pela Torque nem como substituto automático das obrigações municipais de cadastro, ISS ou emissão de nota fiscal. Isso precisa ser definido **antes** de vender o Torque para empresas (pessoas jurídicas) como clientes — não está definido ainda.
+
+**Documentos que precisam refletir a titularidade real**:
+- Contratos, Termos de Uso, Política de Privacidade, política de cancelamento, renovação, inadimplência, reembolso e suporte precisam identificar corretamente **Weverson Silva/CPF**, enquanto não houver pessoa jurídica constituída.
+- **O checkout não deve apresentar a Torque como pessoa jurídica** enquanto ela não existir formalmente — nenhuma menção a CNPJ, razão social ou identidade empresarial fictícia.
+
+**Proteção de dados**:
+- Dados de cobrança, CPF e e-mail usados neste fluxo devem seguir a **LGPD**: minimização de dados coletados, controle de acesso, retenção adequada (nem além do necessário) e capacidade de resposta a incidentes — mesmo requisito transversal já registrado na seção "Segurança e proteção de dados" desta fase.
+- **A plataforma não deve armazenar dados completos de cartão** — o processamento de pagamento deve ficar inteiramente a cargo de um provedor de pagamento compatível (tokenização), mesma restrição já registrada na seção "Segurança e proteção de dados".
+
+**Marco obrigatório de regularização**:
+- Fica registrado um **marco obrigatório de "regularização antes da escala"** — a formalização (CNPJ, contador) não deve esperar automaticamente até o cliente pagante de número 100; qualquer um dos gatilhos listados acima (volume, faturamento, habitualidade, exigência externa) antecipa esse marco.
+- **Contador e advogado deverão validar este modelo** (titularidade da cobrança, tributação, documentos, LGPD) **antes de a operação comercial recorrente ganhar escala** — nenhuma cobrança recorrente em volume deve começar sem essa validação profissional.
+
+## Checkpoint de 11/09/2026 — Incremento 3.2: duas decisões de negócio aprovadas (investigação técnica em andamento)
+
+🟢 **DECISÕES DE NEGÓCIO APROVADAS PELO USUÁRIO. Nenhuma tabela criada, nenhum SQL executado, nenhum arquivo de código alterado nesta etapa.** Estas duas decisões resolvem as duas pendências registradas no checkpoint "Próximo incremento identificado" logo abaixo (linhas "Depende de uma decisão de negócio ainda não tomada..." e "Decisão de reconciliação ainda em aberto...") — registradas aqui como um novo checkpoint, sem alterar o texto histórico daquela análise.
+
+**Decisão 1 — Efeito de alteração de preço sobre assinaturas**:
+- Novas assinaturas usam o preço vigente do plano no momento da contratação.
+- Assinaturas já existentes **preservam o preço contratado original** — um reajuste de preço no catálogo não muda automaticamente o valor de nenhuma assinatura já ativa.
+- Reajustar o preço de contratos já existentes será feito **futuramente, por uma ação administrativa específica e própria** (não é parte do Incremento 3.2).
+- **Todo reajuste de preço deverá ter data de vigência e ficar registrado em histórico** — nunca sobrescrevendo um preço anterior.
+- **Nenhuma assinatura existente muda de preço de forma automática ou implícita**, nem por efeito colateral de uma alteração no catálogo.
+
+**Decisão 2 — Migração de `empresas.plano` (texto livre legado) para o catálogo normalizado**:
+- Será criado o plano **"Teste"** no novo catálogo normalizado de planos.
+- **Novas assinaturas** deverão referenciar o catálogo por `plano_id` (nunca mais por texto livre).
+- **Empresas atuais** serão associadas ao plano "Teste" normalizado (consistente com o diagnóstico real do Incremento 3.1, que já confirmou 100% das empresas com `plano='Teste'` na data da consulta).
+- `empresas.plano` (coluna de texto livre) será **mantida temporariamente como campo legado** — não é removida nem deixa de funcionar nesta etapa.
+- **A remoção definitiva do campo legado só poderá acontecer em outra migração futura, separada, após validação completa** de que a nova estrutura normalizada está correta e em uso — nunca como parte do Incremento 3.2.
+
+Essas duas decisões **não alteram nenhuma decisão anterior já registrada** neste documento — apenas resolvem, de forma explícita, os dois pontos que a análise do Incremento 3.2 (logo abaixo) já havia identificado como pendentes antes de iniciar o desenho técnico da migração.
 
 ## Checkpoint de 11/09/2026 — Incremento 3.1 concluído (banco + frontend) e publicado em produção
 
