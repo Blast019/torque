@@ -1,6 +1,187 @@
 # Fase 5 — SaaS / Administração
 
-Última atualização: 2026-09-14
+Última atualização: 2026-09-16
+
+## Checkpoint de 16/09/2026 — Incremento 3.2 (Alternativa C): admin-12 e admin-13 executados com sucesso (estrutura de `assinaturas` criada, empresas existentes associadas)
+
+🟢 **admin-12 E admin-13 EXECUTADOS COM SUCESSO EM PRODUÇÃO, VALIDADOS POR CONSULTA INDEPENDENTE AO CATÁLOGO.** Este checkpoint registra **exclusivamente** a criação da base estrutural de `public.assinaturas` e a associação, por backfill, das empresas já existentes. **Não representa a conclusão do fluxo comercial de assinaturas** — nenhuma cobrança, pagamento, RPC administrativa de confirmação, aviso automático, bloqueio de acesso ou tela de frontend foi implementada nesta etapa. `admin-14`/`admin-15` continuam preparados e não executados, como rollback de emergência.
+
+### Execução (SQL Editor do Supabase, 16/09/2026)
+
+| Script | Resultado |
+|---|---|
+| `admin-12-estrutura-assinaturas.sql` | `Success. No rows returned` |
+| `admin-13-backfill-assinaturas-empresas.sql` | `Success. No rows returned` |
+
+### Validação independente (consulta separada ao catálogo, não os `DO $$` dos scripts)
+
+| Campo | Valor |
+|---|---|
+| `total_empresas` | `10` |
+| `total_assinaturas` | `10` |
+| `empresas_com_assinatura` | `10` |
+| `empresas_sem_assinatura` | `0` |
+| `associacoes_divergentes` | `0` |
+| `assinaturas_marcadas_backfill` | `10` |
+| `assinaturas_nao_marcadas` | `0` |
+| `empresas_com_duplicidade` | `0` |
+| `rls_habilitado` | `true` |
+| `rls_forcado` | `false` |
+| `total_policies` | `0` |
+| `total_constraints` | `4` |
+| `total_indices` | `2` |
+| `privilegios_proibidos` | `0` |
+| `validacao_geral_ok` | `true` |
+
+### Estado real após esta etapa
+
+- `public.assinaturas` criada e populada — **exatamente** as 10 empresas existentes, cada uma com sua assinatura marcada pelo `id` determinístico do backfill (0 assinaturas não marcadas, 0 divergências, 0 duplicidades).
+- `empresas.plano`/`empresas.status_assinatura` continuam **intocados**, como campo legado.
+- Nenhuma RPC foi criada ou alterada; `criar_empresa_com_vinculo`, `criar_nova_empresa_com_vinculo`, `criar_empresa_autorizada` e `admin_visao_geral_empresas` continuam exatamente como estavam.
+- Nenhuma cobrança, pagamento, aviso, bloqueio de acesso ou tela de frontend existe ainda.
+- **Consequência ainda válida**: nenhuma empresa nova deve ser criada até `criar_empresa_autorizada` ser adaptada para também criar a assinatura correspondente (ver checkpoint anterior, seção de riscos).
+- `admin-14`/`admin-15` permanecem preparados, não executados.
+
+### Decisões de negócio aprovadas para o próximo incremento (PLANEJAMENTO APROVADO — nada disto foi implementado)
+
+- Plano **Profissional**, R$ 150,00 mensais.
+- Cobrança **por empresa/unidade** (não por usuário).
+- Usuários **inicialmente ilimitados**.
+- **Teste gratuito de 7 dias.**
+- Toda nova empresa deve receber automaticamente: plano **Teste**; `situacao = 'em_teste'`; `iniciada_em` = momento da criação; `teste_ate` = momento da criação + 7 dias.
+- `teste_ate` pode ser **prorrogado administrativamente**.
+- **Aviso automático** quando faltarem 2 dias para o vencimento do teste.
+- **Aviso automático** no último dia do teste.
+- **Bloqueio de acesso** após o vencimento sem pagamento.
+- **Indicadores administrativos**: testes próximos do vencimento, testes vencidos, testes convertidos.
+- **Notificações iniciais** por painel administrativo e e-mail.
+- **WhatsApp fica para etapa posterior** — custo por envio e complexidade de integração.
+
+### Decisões de regularização aprovadas (PLANEJAMENTO APROVADO — nada disto foi implementado)
+
+**Fase inicial — confirmação manual via PIX**:
+- Pagamento por **PIX**.
+- **Confirmação administrativa pelo painel Torque-Admin** — não há confirmação automática nesta fase.
+- Após confirmar o recebimento, o sistema deverá: registrar o pagamento; alterar a assinatura para o plano Profissional; definir `situacao = 'ativa'`; calcular o próximo vencimento mensal; registrar o evento no histórico; liberar o acesso imediatamente.
+
+**Cliente bloqueado (experiência de bloqueio)**:
+- O cliente **continua conseguindo fazer login**.
+- O bloqueio atinge **somente as funções operacionais**.
+- Permanecem acessíveis: tela de assinatura e pagamento; instruções para pagamento via PIX; dados básicos da empresa; suporte; botão para sair.
+- A tela deve mostrar o motivo do bloqueio, valor, vencimento e um botão **"Regularizar assinatura"**.
+
+**Segurança (regras obrigatórias para a implementação futura)**:
+- O **frontend nunca poderá** ativar ou regularizar a própria assinatura.
+- **Somente uma RPC administrativa protegida** poderá confirmar manualmente o pagamento.
+- **Somente administradores da plataforma** poderão executar essa confirmação.
+- A operação deverá ser **transacional e idempotente** — uma confirmação repetida não pode duplicar pagamento, renovação ou histórico.
+- **Toda mudança** de plano, situação ou vencimento deve gerar histórico.
+
+**Fase futura**:
+- Integrar um **gateway** para PIX, boleto ou cartão.
+- Receber **confirmação automática por webhook**.
+- Essa integração deve **substituir a confirmação manual sem precisar redesenhar o banco**.
+- **Nunca confiar** em confirmação enviada diretamente pelo navegador do cliente.
+
+**Estrutura futura necessária** (nenhuma criada ainda, exceto `assinaturas`):
+- `public.assinaturas` continuará representando o estado atual (já criada nesta etapa).
+- `public.assinaturas_historico` registrará mudanças (ainda não criada).
+- `public.cobrancas` representará valores e vencimentos (ainda não criada).
+- `public.pagamentos` registrará os pagamentos (ainda não criada).
+- A modelagem deverá suportar confirmação manual agora e confirmação automática futuramente, sem redesenho.
+
+### Próximos passos (ordem aprovada, nada disto foi iniciado)
+
+1. Criar uma **nova migração** para `teste_ate` — sem modificar retroativamente o `admin-12` já executado.
+2. Cadastrar o plano **Profissional** e sua vigência inicial em `planos`/`planos_historico_precos`.
+3. Adaptar `criar_empresa_autorizada` para criar a assinatura (plano Teste, `situacao='em_teste'`, `teste_ate`) de toda empresa nova.
+4. Criar o histórico inicial da assinatura (`assinaturas_historico`).
+5. Implementar a validação de acesso pelo vencimento (bloqueio de funções operacionais após `teste_ate`/vencimento sem pagamento).
+6. Implementar avisos automáticos (2 dias antes, último dia) e os indicadores administrativos (testes próximos do vencimento, vencidos, convertidos).
+
+## Checkpoint de 16/09/2026 — Incremento 3.2: associação empresas↔plano — Alternativa C aprovada, pacote SQL preparado (não executado)
+
+🔵 **DESENHO TÉCNICO E PREPARAÇÃO DE SCRIPTS. Nenhum dos quatro scripts abaixo foi executado no Supabase.** Este checkpoint registra a decisão definitiva de arquitetura para a associação das empresas ao catálogo normalizado de planos, o diagnóstico real que a fundamentou, e os quatro scripts preparados (não executados) que a implementam.
+
+### Decisão definitiva — Alternativa C
+
+Depois da auditoria técnica registrada nesta mesma sessão (comparando Alternativa A — `empresas.plano_id` mantendo `empresas.plano` — Alternativa B — substituir `empresas.plano` diretamente — e Alternativa C — antecipar uma `public.assinaturas` mínima, já no formato aprovado pela Correção 1), **a Alternativa C foi aprovada**:
+
+- **`public.assinaturas` é a fonte oficial da assinatura atual da empresa.**
+- **`assinaturas.plano_id` é a fonte oficial do plano atual.**
+- **`empresas.plano_id` não é criada** — evita duas fontes normalizadas concorrentes para a mesma pergunta ("qual o plano desta empresa?").
+- `empresas.plano` e `empresas.status_assinatura` **permanecem temporariamente como campos legados**, intocados — nenhuma coluna removida ou alterada nesta etapa.
+- Justificativa registrada: como ainda não existem clientes pagantes nem operação comercial real, a transição deve ser **curta, objetiva e definitiva**, sem camada de compatibilidade prolongada — e a Alternativa C evita fazer a modelagem de "plano atual da empresa" duas vezes (uma agora em `empresas`, outra depois em `assinaturas` no Incremento 3.3/3.4).
+
+### Diagnóstico real que fundamentou a decisão (executado pelo usuário no SQL Editor do Supabase, 16/09/2026)
+
+| Item | Resultado |
+|---|---|
+| Total de empresas | `10` |
+| Empresas com `plano = 'Teste'` | `10` (100%) |
+| Anomalias em `plano`/`status_assinatura` (nulo, vazio, espaços, grafia inconsistente) | Nenhuma encontrada |
+| Plano "Teste" | `id=ec0b63f7-0fde-43ff-8806-07a489e8dfdb`, `preco=0`, `moeda=BRL`, `ativo=true` |
+| Vigências abertas do plano "Teste" em `planos_historico_precos` | Exatamente `1` |
+| `public.assinaturas` | Confirmado que ainda não existe |
+| Dependências reais de `empresas.plano`/`status_assinatura` | Nenhuma view, materialized view, trigger, policy, constraint ou índice depende dessas colunas |
+| RPCs que leem os campos legados | 4: `criar_empresa_com_vinculo`, `criar_nova_empresa_com_vinculo`, `criar_empresa_autorizada`, `admin_visao_geral_empresas` |
+| RPC ativa para `authenticated` | Somente `criar_empresa_autorizada` |
+| Grants das demais RPCs de criação de empresa | Somente `EXECUTE` para `service_role` |
+| Grants de `admin_visao_geral_empresas` | `EXECUTE` para `authenticated` e `service_role` |
+
+### Estrutura proposta — `public.assinaturas` (exatamente o modelo já aprovado na Correção 1, nenhum campo novo)
+
+| Coluna | Tipo | Nulo? | Observação |
+|---|---|---|---|
+| `id` | uuid | não | PK, `default gen_random_uuid()` — identidade permanente da assinatura |
+| `empresa_id` | uuid | não | `UNIQUE`, FK → `empresas(id)` **`ON DELETE CASCADE`** (mesma regra das outras 11 FKs existentes para `empresas`) |
+| `plano_id` | uuid | não | FK → `planos(id)`, **sem `ON DELETE`** (mesma regra da FK já existente `planos_historico_precos_plano_id_fkey`) |
+| `situacao` | text | não | cache do estado corrente — sem `CHECK` (nenhum domínio fechado foi aprovado ainda) |
+| `iniciada_em` | timestamptz | não | sem default — sempre informado explicitamente por quem escreve |
+| `criado_em` | timestamptz | não | `default now()` |
+
+**Segurança**: `ENABLE ROW LEVEL SECURITY` sem `FORCE`, zero políticas nesta etapa, `REVOKE ALL FROM PUBLIC, anon, authenticated`, owner `postgres` — mesmo padrão já aprovado em `admin-07`/`admin-08`.
+
+### Scripts preparados — NENHUM EXECUTADO
+
+| Script | Papel |
+|---|---|
+| `qa/fase-5/scripts/admin-12-estrutura-assinaturas.sql` | Cria `public.assinaturas` (estrutura acima), com precheck e verificação final fail-closed estrutural (mesmo padrão do `admin-08`: `conkey`/`confkey`/`confdeltype` via catálogo, ACL via `pg_class.relacl`+`aclexplode`). |
+| `qa/fase-5/scripts/admin-13-backfill-assinaturas-empresas.sql` | Seed idempotente: associa cada uma das 10 empresas à sua assinatura, resolvendo `plano_id` por `planos.nome = empresas.plano` (nunca por UUID fixo), copiando `status_assinatura` para `situacao`. Cada linha criada recebe um **`id` determinístico** (marcador técnico, não identificador de negócio) — ver seção própria abaixo. Aborta inteiro (sem criar nada) se algum valor de `plano` não tiver correspondência única e ativa no catálogo. Replay idempotente — nunca sobrescreve uma assinatura existente divergente. Locks explícitos contra concorrência (ver seção de riscos). |
+| `qa/fase-5/scripts/admin-14-rollback-backfill-assinaturas-empresas.sql` | Reverte **somente** o `admin-13`: identifica as linhas a remover **exclusivamente pelo `id` determinístico** do backfill (nunca por comparação de `plano_id`/`situacao` com o estado atual de `empresas` — essa comparação, isolada, não prova a origem de uma linha e poderia apagar por engano uma assinatura futura com valores coincidentes). Só depois de localizada pelo `id` exato, a linha é validada campo a campo; se divergir, aborta inteiro sem excluir nada. `DELETE` sempre com `WHERE` explícito pelo conjunto de `id`s marcados — nunca `DELETE` sem filtro. Preserva intocada qualquer assinatura com `id` fora desse marcador (confirmado antes e depois). Locks explícitos contra concorrência (ver seção de riscos). |
+| `qa/fase-5/scripts/admin-15-rollback-estrutura-assinaturas.sql` | Reverte **somente** o `admin-12`: exige `assinaturas` vazia, `DROP TABLE` sem `CASCADE`. Nunca toca `planos`, `planos_historico_precos`, `empresas` ou RPCs. |
+
+### Ordem futura de execução (quando autorizada — não autorizada ainda)
+
+1. `admin-12` (estrutura).
+2. `admin-13` (backfill), somente após `admin-12` concluir com sucesso.
+3. Validação independente (consulta somente leitura ao catálogo, mesmo padrão já usado após `admin-06`/`admin-07`/`admin-08`/`admin-09`).
+4. `admin-14`/`admin-15` permanecem preparados como rollback de emergência, não fazem parte do fluxo normal.
+
+### Correção de revisão (16/09/2026) — identificação exclusiva das linhas do backfill e locks de concorrência
+
+🟡 Uma rodada de revisão técnica encontrou dois problemas no desenho original do `admin-13`/`admin-14` (nenhum dos dois havia sido executado ainda) e exigiu correção antes da aprovação:
+
+1. **Identificação da origem de uma linha (crítico)**: o desenho original do `admin-14` identificava as linhas a remover comparando `plano_id`/`situacao` com o estado atual de `empresas` — isso **não prova a origem** de uma linha; uma assinatura criada depois por outro caminho (ex.: a futura RPC do Incremento 3.3/3.4) poderia coincidir nesses valores e ser apagada por engano. **Corrigido**: cada linha criada pelo `admin-13` recebe agora um **`id` determinístico** — `md5('torque:admin-13:assinatura:' || empresa_id::text)::uuid` — em vez do `gen_random_uuid()` padrão da tabela (que continua sendo o `DEFAULT` da coluna, inalterado, e continuará sendo usado por qualquer assinatura normal futura). Esse `id` é só uma **marca técnica** das linhas deste backfill, nunca um identificador de negócio. O `admin-13` verifica colisão do marcador contra outras empresas antes de inserir, e recusa fazer replay sobre uma linha existente cujo `id` não seja esse marcador exato. O `admin-14` passa a localizar candidatas **exclusivamente por esse `id`** — nunca por comparação de campos legados — valida cada candidata campo a campo antes de excluir, usa `DELETE ... WHERE id IN (...)` explícito (nunca `DELETE` sem filtro), e confirma, antes e depois, que a contagem de linhas **não marcadas** (qualquer assinatura cujo `id` não seja o marcador de nenhuma empresa atual) permanece exatamente igual — prova de que nenhuma assinatura futura ou já modificada foi tocada.
+2. **Concorrência**: `admin-13` e `admin-14` agora adquirem `LOCK TABLE ... IN SHARE MODE` sobre `empresas`, `planos` e `assinaturas` (sempre nessa ordem, para evitar deadlock com execuções concorrentes), logo após confirmar que as tabelas existem, mantidos até o `COMMIT`/`ROLLBACK`. `SHARE` foi escolhido como o modo mínimo suficiente: bloqueia qualquer `INSERT`/`UPDATE`/`DELETE` concorrente (que sempre exigem `ROW EXCLUSIVE`, conflitante com `SHARE`) durante todo o precheck/backfill/verificação ou validação/exclusão, sem bloquear leituras simples — `ACCESS EXCLUSIVE` seria desnecessariamente mais restritivo.
+
+`admin-12` e `admin-15` foram revisados e **não precisaram de alteração**: `admin-12` é DDL puro (não tem a janela de corrida que motivou a correção); `admin-15` já exigia `public.assinaturas` completamente vazia antes do `DROP` — critério que, por si só, já recusa o `DROP` se existir qualquer assinatura futura não removida pelo `admin-14`, marcada ou não.
+
+### Riscos registrados nesta etapa
+
+- **Gap temporário e documentado da "Regra obrigatória de implementação" da Correção 1**: essa regra exige que nenhuma escrita em `assinaturas.plano_id`/`situacao` aconteça fora de uma RPC única que também feche o evento anterior e grave em `assinaturas_historico` — mas `assinaturas_historico` e essa RPC ainda não existem (são trabalho do Incremento 3.3/3.4). O `admin-13` é, por decisão explícita e temporária, o único escritor direto autorizado dessas colunas enquanto esse gap não for fechado.
+- **RPCs ainda não adaptadas**: as 4 RPCs que leem `empresas.plano`/`status_assinatura` (`criar_empresa_com_vinculo`, `criar_nova_empresa_com_vinculo`, `criar_empresa_autorizada`, `admin_visao_geral_empresas`) continuam exatamente como estão — nenhuma foi alterada, nenhuma passou a gravar em `assinaturas`.
+- **Consequência prática obrigatória enquanto isso não é resolvido**: **nenhuma empresa nova deve ser criada depois que o `admin-13` (backfill) for executado**, até que `criar_empresa_autorizada` (a única RPC ativa de criação de empresa) seja adaptada para também criar a assinatura correspondente — caso contrário, uma empresa nova ficaria sem nenhuma linha em `assinaturas`, quebrando a garantia "toda empresa tem exatamente uma assinatura" que o backfill estabelece.
+- `criar_nova_empresa_com_vinculo` (segunda RPC legada de criação) teve sua situação de grants confirmada no diagnóstico (`EXECUTE` só para `service_role`) mas **não foi confirmado se seu código ainda é idêntico ao lido** — não é reexecutada nem alterada nesta etapa.
+
+### Pendente (nada disto foi executado nesta etapa)
+
+- Executar `admin-12` e `admin-13` no Supabase (aguardando autorização).
+- Validação independente pós-execução.
+- Adaptar `criar_empresa_autorizada` (e decidir o destino das duas RPCs legadas) para também gravar em `assinaturas` — só depois disso será seguro voltar a criar empresas novas sem quebrar a garantia de cobertura total.
+- Criar `public.assinaturas_historico` e a RPC única de escrita disciplinada (Incremento 3.3/3.4) — fecha o gap da "Regra obrigatória" citado acima.
+- `public.cobrancas`, `public.pagamentos`, rateio — permanecem fora de escopo, Incremento 3.3/3.4 em diante.
+- Migração definitiva/remoção de `empresas.plano`/`status_assinatura` — só numa migração futura e separada, após validação completa de que `assinaturas` está correta e em uso (mesma garantia já registrada na Decisão 2 original).
 
 ## Checkpoint de 14/09/2026 — Incremento 3.2: admin-08 e admin-09 executados com sucesso (histórico de preços criado, plano "Teste" normalizado semeado)
 
